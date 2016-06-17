@@ -1,0 +1,9 @@
+epsilon 1.250000e-01
+ alpha 2.000000e-04
+s 1.666667e-01
+ l 1.000000e-08
+sigma 1.000000e-04
+tMin 1.000000e-10 
+ tMax Inf
+TOLrel  1.000000e-20 
+ TOLabs = 1.000000e-07
