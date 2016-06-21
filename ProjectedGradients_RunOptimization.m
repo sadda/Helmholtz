@@ -21,7 +21,7 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
     sigma   = 1e-4;   % for Armijo line search
     tMin    = 1e-10;  % minimal step size
     tMax    = Inf;
-    TOLabs  = 1e-7;
+    TOLabs  = 1e-5;
     TOLrel  = 1e-20;
     x       = TriInfo.x;
     y       = TriInfo.y;
@@ -39,27 +39,24 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
     fclose(fID_Data);
     
     %% Projected gradients
-    iteration                    = 1;
-    iterationData                = 'Iteration_data.csv';
-    res0                         = -Inf;
-    res                          = Inf;
-    resAll                       = nan(IterMax, 1);
-    res2All                      = nan(IterMax, 1);
-    lambda                       = zeros(size(phi));
-    phiProj                      = phi;
-    [uProj,pProj]                = elasticity_adjoint(phiProj,TriInfo,Transformation,matrices,constants,material);
-    [JProj,JProj1,JProj2,JProj3] = functionValue(phiProj,uProj,TriInfo,matrices,constants);
+    iteration                      = 1;
+    iterationData                  = 'Iteration_data.csv';
+    res0                           = -Inf;
+    res                            = Inf;
+    resAll                         = nan(IterMax, 1);
+    res2All                        = nan(IterMax, 1);
+    lambda                         = zeros(size(phi));
+    phiProj                        = phi;
+    [JProj,~,JProj1,JProj2,JProj3] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,0);
     
     while res > (1+res0)*TOLrel && res > TOLabs && iteration < IterMax && abs(t) >= tMin
         tic;
         phi           = phiProj;
-        u             = uProj;
-        p             = pProj;
         J             = JProj;
         J1            = JProj1;
         J2            = JProj2;
         J3            = JProj3;
-        gradient      = gradientJ(phi,u,p,TriInfo,Transformation,matrices,constants,material);
+        [~,gradient]  = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,1);
         rieszGradient = ComputeRieszGradient(gradient, TriInfo, matrices);
         rieszGradient = reshape(rieszGradient,[],sizePhi);
         if iteration == 1
@@ -68,7 +65,7 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
         end
         % Determine the next iterate
         t = min(3*t, tMax);
-        [phiProj,t,lambda,uProj,pProj,JProj,JProj1,JProj2,JProj3] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin);
+        [phiProj,t,lambda,JProj,JProj1,JProj2,JProj3,u,Theta] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin);
         % Compute the optimality (the same as in the loop with t=cOptimality)
         phiCheckNew                   = phi - cOptimality*rieszGradient;
         [phiCheck,~,~,iterationGibbs] = projection2Gibbs(phiCheckNew,phiProj,matrices,lambda,TriInfo);
@@ -97,8 +94,8 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
         fprintf(fID_Newton_p,'\n %d %d %d %d %d %d %d %d %d %d %d %d %d',iteration,t,J,res,res2,iterationGibbs,elapsed,J1,J2,J3);
         fclose(fID_Newton_p);
         
-        filename = ['Phi_iterate', num2str(iteration), '.mat'];
-        save(filename, 'phi');
+        filename = ['Iterate', num2str(iteration), '.mat'];
+        save(filename, 'phi', 'u', 'Theta');
         movefile(filename,dirName);
         
         resAll(iteration)  = res;
@@ -107,20 +104,17 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
         iteration = iteration+1;
     end
     
-    u               = elasticity_adjoint(phi,TriInfo,Transformation,matrices,constants,material);
-    [J, J1, J2, J3] = functionValue(phi,u,TriInfo,matrices,constants);
-    
     fprintf('\n%13s %13s %13s %13s |\n', 'Objective', 'Objective1', 'Objective2', 'Objective3');
-    fprintf('   %4.4e    %4.4e    %4.4e    %4.4e |\n', J, J1, J2, J3);
+    fprintf('   %4.4e    %4.4e    %4.4e    %4.4e |\n', JProj, JProj1, JProj2, JProj3);
     fprintf('\n###########################################################################################################\n\n');
     
-    save('phi','phi');
+    save('phi','phi', 'u', 'Theta');
     save('DataAll');
     
     movefile('phi.mat',dirName);
     movefile('DataAll.mat',dirName);
-        movefile(dataFile,dirName);
-        movefile(iterationData,dirName);
+    movefile(dataFile,dirName);
+    movefile(iterationData,dirName);
     
     %% Draw all figures (after finishing optimization)
     if drawResults
@@ -129,22 +123,26 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
         fileNumberSpace = Inf;
     end
     % Load phi from the files
-    if exist(strcat(dirName, '/PhiAll.mat'), 'file') == 2
-        load(strcat(dirName, '/PhiAll.mat'));
+    if exist(strcat(dirName, '/IteratesAll.mat'), 'file') == 2
+        load(strcat(dirName, '/IteratesAll.mat'));
     else
         fileNumber = 1;
-        while exist(strcat(dirName, '/Phi_iterate', int2str(fileNumber), '.mat'), 'file') == 2
+        while exist(strcat(dirName, '/Iterate', int2str(fileNumber), '.mat'), 'file') == 2
             fileNumber = fileNumber + 1;
         end
         fileNumber = fileNumber - 1;
-        load(strcat(dirName, '/Phi_iterate', int2str(1), '.mat'));
-        phiAll = zeros(fileNumber, size(phi,1), size(phi,2));
+        load(strcat(dirName, '/Iterate', int2str(1), '.mat'));
+        phiAll   = zeros(fileNumber, size(phi,1), size(phi,2));
+        uAll     = zeros(fileNumber, size(u,1), size(u,2));
+        ThetaAll = zeros(fileNumber, size(Theta,1), size(Theta,2));        
         for iteration=1:fileNumber
-            load(strcat(dirName, '/Phi_iterate', int2str(iteration), '.mat'));
-            delete(strcat(dirName, '/Phi_iterate', int2str(iteration), '.mat'));
-            phiAll(iteration+1,:,:) = phi;
+            load(strcat(dirName, '/Iterate', int2str(iteration), '.mat'));
+            delete(strcat(dirName, '/Iterate', int2str(iteration), '.mat'));
+            phiAll(iteration+1,:,:)   = phi;
+            uAll(iteration+1,:,:)     = u;
+            ThetaAll(iteration+1,:,:) = Theta;            
         end
-        save(strcat(dirName, '/PhiAll.mat'), 'phiAll');
+        save(strcat(dirName, '/IteratesAll.mat'), 'phiAll', 'uAll', 'ThetaAll');
     end
     fileNumber = size(phiAll, 1);
     figureNumber = 1 + ceil(fileNumber / fileNumberSpace);
@@ -159,7 +157,11 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
     end
     colormap jet;
     for iteration=iterationAll
-        phi = squeeze(phiAll(iteration+1,:,:));
+        phi          = squeeze(phiAll(iteration+1,:,:));  
+        u            = squeeze(uAll(iteration+1,:,:));
+        Theta        = squeeze(ThetaAll(iteration+1,:,:));
+        u            = u(:);
+        Theta        = Theta(:);
         phiProlonged = ProlongPhi(phi, TriInfo);
         
         set(gcf,'Visible','off');
@@ -179,8 +181,6 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
             saveas(gcf, filename, 'jpg');
             movefile(filename, dirName);
         end
-        
-        u = elasticity_adjoint(phi,TriInfo,Transformation,matrices,constants,material);
         
         set(gcf,'Visible','off');
         filename = ['Ux_iterate', num2str(iteration), '.jpg'];
@@ -206,18 +206,33 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
         trisurf(e2p, x, y, tr_eps);
         saveas(gcf,filename,'jpg');
         movefile(filename,dirName);
+        
+        boundPhi = phiProlonged(:,1)>=0.3;
+        boundX   = TriInfo.x(boundPhi);
+        boundY   = TriInfo.y(boundPhi);
+        bound    = boundary(boundX, boundY);
+        set(gcf,'Visible','off');
+        filename = ['Mode', num2str(iteration), '.jpg'];
+        trisurf(e2p, x, y, Theta);
+        view(2);
+        shading interp;
+        colormap jet;
+        colorbar;
+        hold on;
+        plot3(boundX(bound), boundY(bound), 2*ones(size(bound)), 'k');
+        saveas(gcf,filename,'jpg');
+        movefile(filename,dirName);
     end
 end
 
-function [phiProj,t,lambda,uProj,pProj,JProj,JProj1,JProj2,JProj3] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin)
+function [phiProj,t,lambda,JProj,JProj1,JProj2,JProj3,u,Theta] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin)
     phiProj = phi;
     while true
-        phiNew                              = phi-t*rieszGradient;
-        [phiProj,lambda]                    = projection2Gibbs(phiNew,phiProj,matrices,lambda,TriInfo);
-        [uProj, pProj]                      = elasticity_adjoint(phiProj,TriInfo,Transformation,matrices,constants,material);
-        [JProj,JProj1,JProj2,JProj3] = functionValue(phiProj,uProj,TriInfo,matrices,constants);
-        phiDiff                             = phi-phiProj;
-        normPhiDiffSquare                   = ComputePhiNormSquare(phiDiff, TriInfo, matrices);
+        phiNew                                       = phi-t*rieszGradient;
+        [phiProj,lambda]                             = projection2Gibbs(phiNew,phiProj,matrices,lambda,TriInfo);
+        [JProj,~,JProj1,JProj2,JProj3,~,~,~,u,Theta] = ComputeData(phiProj,TriInfo,Transformation,matrices,constants,material,0);
+        phiDiff                                      = phi-phiProj;
+        normPhiDiffSquare                            = ComputePhiNormSquare(phiDiff, TriInfo, matrices);
         if JProj-J <= -(sigma/t)*normPhiDiffSquare || t < tMin
             break;
         else

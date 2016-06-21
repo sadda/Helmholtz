@@ -1,12 +1,18 @@
 clear all;
 close all;
 
-tInit       = 1;
+tInit       = 1e3;
 refineMesh  = 4;
 drawResults = 1;
 IterMax     = 5000;
-algorithm   = 1;
 alpha       = 2e-4;
+
+
+% IterMax = 5;
+% alpha = 1e-4;
+refineMesh = 2;
+
+
 
 for meshIndex = 1:refineMesh
     % Construct mesh and determine the starting point
@@ -14,8 +20,9 @@ for meshIndex = 1:refineMesh
         load('MeshesCreated/VoidUR0Pr/Data.mat');
         meshMaxElement = [max(diff(unique(TriInfo.x))); max(diff(unique(TriInfo.y)))];
         epsilon        = 2*max(meshMaxElement);
-        phi            = rand(TriInfo.npointRed, TriInfo.sizePhi);
-        phi            = phi ./ repmat(sum(phi,2), 1, TriInfo.sizePhi);
+        %phi            = rand(TriInfo.npointRed, TriInfo.sizePhi);
+        %phi            = phi ./ repmat(sum(phi,2), 1, TriInfo.sizePhi);
+        phi            = 1/TriInfo.sizePhi*ones(TriInfo.npointRed, TriInfo.sizePhi);
     else
         phiProlonged = ProlongPhi(phi, TriInfo);
         [Transformation, TriInfo, matrices, phi] = MeshCreateProlong(TriInfo, phiProlonged, 0, 1.5*meshMaxElement, phiProlonged);
@@ -31,7 +38,7 @@ for meshIndex = 1:refineMesh
     [phi, tInit] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, Transformation, matrices, dirName, IterMax, drawResults, phi, tInit);
 end
 
-exit;
+% exit;
 
 
 
