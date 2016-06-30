@@ -39,15 +39,16 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
     fclose(fID_Data);
     
     %% Projected gradients
-    iteration                      = 1;
-    iterationData                  = 'Iteration_data.csv';
-    res0                           = -Inf;
-    res                            = Inf;
-    resAll                         = nan(IterMax, 1);
-    res2All                        = nan(IterMax, 1);
-    lambda                         = zeros(size(phi));
-    phiProj                        = phi;
-    [JProj,~,JProj1,JProj2,JProj3] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,0);
+    iteration     = 1;
+    iterationData = 'Iteration_data.csv';
+    res0          = -Inf;
+    res           = Inf;
+    resAll        = nan(IterMax, 1);
+    res2All       = nan(IterMax, 1);
+    lambda        = zeros(size(phi));
+    phiProj       = phi;
+    yEigen        = [];
+    [JProj,~,JProj1,JProj2,JProj3,~,~,~,~,~,yEigen] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,0,yEigen);
     
     while res > (1+res0)*TOLrel && res > TOLabs && iteration < IterMax && abs(t) >= tMin
         tic;
@@ -56,7 +57,7 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
         J1            = JProj1;
         J2            = JProj2;
         J3            = JProj3;
-        [~,gradient]  = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,1);
+        [~,gradient,~,~,~,~,~,~,~,~,yEigen]  = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,1,yEigen);
         rieszGradient = ComputeRieszGradient(gradient, TriInfo, matrices);
         rieszGradient = reshape(rieszGradient,[],sizePhi);
         if iteration == 1
@@ -65,7 +66,7 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
         end
         % Determine the next iterate
         t = min(3*t, tMax);
-        [phiProj,t,lambda,JProj,JProj1,JProj2,JProj3,u,Theta] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin);
+        [phiProj,t,lambda,JProj,JProj1,JProj2,JProj3,u,Theta,yEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,yEigen);
         % Compute the optimality (the same as in the loop with t=cOptimality)
         phiCheckNew                   = phi - cOptimality*rieszGradient;
         [phiCheck,~,~,iterationGibbs] = projection2Gibbs(phiCheckNew,phiProj,matrices,lambda,TriInfo);
@@ -225,14 +226,14 @@ function [phi, t] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, 
     end
 end
 
-function [phiProj,t,lambda,JProj,JProj1,JProj2,JProj3,u,Theta] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin)
+function [phiProj,t,lambda,JProj,JProj1,JProj2,JProj3,u,Theta,yEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,yEigen)
     phiProj = phi;
     while true
-        phiNew                                       = phi-t*rieszGradient;
-        [phiProj,lambda]                             = projection2Gibbs(phiNew,phiProj,matrices,lambda,TriInfo);
-        [JProj,~,JProj1,JProj2,JProj3,~,~,~,u,Theta] = ComputeData(phiProj,TriInfo,Transformation,matrices,constants,material,0);
-        phiDiff                                      = phi-phiProj;
-        normPhiDiffSquare                            = ComputePhiNormSquare(phiDiff, TriInfo, matrices);
+        phiNew                                              = phi-t*rieszGradient;
+        [phiProj,lambda]                                    = projection2Gibbs(phiNew,phiProj,matrices,lambda,TriInfo);
+        [JProj,~,JProj1,JProj2,JProj3,~,~,~,u,Theta,yEigen] = ComputeData(phiProj,TriInfo,Transformation,matrices,constants,material,0,yEigen);
+        phiDiff                                             = phi-phiProj;
+        normPhiDiffSquare                                   = ComputePhiNormSquare(phiDiff, TriInfo, matrices);
         if JProj-J <= -(sigma/t)*normPhiDiffSquare || t < tMin
             break;
         else

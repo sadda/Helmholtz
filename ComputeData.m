@@ -1,4 +1,4 @@
-function [J, G, J1, J2, J3, G1, G2, G3, u, Theta] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,computeG)
+function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,computeG,yEigen)
     
     if nargin < 7
         computeG = 1;
@@ -93,7 +93,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta] = ComputeData(phi,TriInfo,Tran
     %% Compute Theta and eigen
     
     phiSum = sum(phi.*repmat(epsilonR,npoint,1),2);
-    % phi*Theta*v
+    % phi*Theta*v -> Theta
     T = zeros(nelement,1,1,9);
     for k=1:nelement
         edet   = Transformation{k,1};
@@ -119,25 +119,36 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta] = ComputeData(phi,TriInfo,Tran
     MFull = matrices.Mloc(1:npoint,1:npoint);
     M     = matrices.Mloc(id1D,id1D);
     
-    AEigen = M \ (S-T);
-    % AEigen = diag(1./sum(M,2)) * (S-T);
-    
-    Theta                = zeros(npoint,1);
-    shift                = max(epsilonR);
-    [Theta(id1D), eigen] = eigs(AEigen + shift*speye(size(AEigen)), 1, 'sm');
-    eigen                = eigen - shift;
-    
-    
-%     eigen
-    
-    
-    Theta                = Theta / sqrt(Theta'*MFull*Theta);
+    shift   = max(epsilonR);
+    maxIter = 200;
+    L       = chol(S-T+shift*M);
+    Theta   = zeros(npoint,1);
+    if ~exist('yEigen', 'var') || isempty(yEigen);
+        yEigen = rand(sum(id1D),1);
+    end
+    for i=1:maxIter
+        x      = yEigen / norm(yEigen);
+        Mx     = M*x;
+        yEigen      = L \ (L' \ Mx);
+        eigen = 1/(yEigen'*x);
+        res    = (S-T+shift*M)*x-eigen*Mx;
+        if norm(res) <= 1e-12
+            break
+        end
+    end
+    if i == maxIter
+        warning('Maximum number of iterations for eigenvalue computation exceeded');
+    end
+    Theta(id1D) = x;
+    eigen       = eigen - shift;
+    Theta       = Theta / sqrt(Theta'*MFull*Theta);
     if median(Theta) < 0
         Theta = -Theta;
     end
     
     %% Compute objective
     
+    % tr(e(u))theta^2 -> theta, theta
     AObj = zeros(nelement,1,1,9);
     for k=1:nelement
         edet   = Transformation{k,1};
@@ -166,6 +177,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta] = ComputeData(phi,TriInfo,Tran
     if nargout > 1 && computeG
         %% Compute p
         
+        % tr(e(v))theta^2 -> v (vector)
         bAdjP = zeros(nelement,1,3);
         for k=1:nelement
             edet   = Transformation{k,1};
@@ -261,7 +273,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta] = ComputeData(phi,TriInfo,Tran
         EdPhi = sparse(TriInfo.indicesIiPhi(:),TriInfo.indicesJjPhi(:), EdPhi(:));
         EdPhi = EdPhi + A42*u(:);
         
-        % deltaPhi*Theta*q
+        % v*Theta*q -> q
         T   = zeros(nelement,1,1,9);
         ii3 = zeros(nelement,sizePhi,1,9);
         jj3 = zeros(nelement,sizePhi,1,9);
