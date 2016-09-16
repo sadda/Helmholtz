@@ -116,12 +116,11 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
     T     = sparse(ii1D(:), jj2D(:), T(:));
     T     = T(id1D,id1D);
     S     = matrices.GradSq(id1D,id1D);
-    MFull = matrices.Mloc(1:npoint,1:npoint);
     M     = matrices.Mloc(id1D,id1D);
     
     shift   = max(epsilonR);
     maxIter = 200;
-    L       = chol(S-T+shift*M);
+    R       = chol(S-T+shift*M);
     Theta   = zeros(npoint,1);
     if ~exist('yEigen', 'var') || isempty(yEigen);
         yEigen = rand(sum(id1D),1);
@@ -129,8 +128,8 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
     for i=1:maxIter
         x      = yEigen / norm(yEigen);
         Mx     = M*x;
-        yEigen      = L \ (L' \ Mx);
-        eigen = 1/(yEigen'*x);
+        yEigen = R \ (R' \ Mx);
+        eigen  = 1/(yEigen'*x);
         res    = (S-T+shift*M)*x-eigen*Mx;
         if norm(res) <= 1e-12
             break
@@ -141,7 +140,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
     end
     Theta(id1D) = x;
     eigen       = eigen - shift;
-    Theta       = Theta / sqrt(Theta'*MFull*Theta);
+    Theta       = Theta / sqrt(Theta'*matrices.Mloc(1:npoint,1:npoint)*Theta);
     if median(Theta) < 0
         Theta = -Theta;
     end
@@ -275,8 +274,6 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
         
         % v*Theta*q -> q
         T   = zeros(nelement,1,1,9);
-        ii3 = zeros(nelement,sizePhi,1,9);
-        jj3 = zeros(nelement,sizePhi,1,9);
         for k=1:nelement
             edet   = Transformation{k,1};
             
@@ -290,24 +287,11 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
             addition68 = 1*ThetaAux(1)+2*ThetaAux(2)+2*ThetaAux(3);
             addition   = [addition1 addition24 addition37; addition24 addition5 addition68; addition37 addition68 addition9];
             
-            for i1=1:sizePhi
-                for j1=1:1
-                    ii3( k,i1,j1,: ) = (i1-1)*npoint + ...
-                        [e2p(k,1) e2p(k,2) e2p(k,3) ...
-                        e2p(k,1) e2p(k,2) e2p(k,3) ...
-                        e2p(k,1) e2p(k,2) e2p(k,3)];
-                    jj3( k,i1,j1,: ) = (j1-1)*npoint + ...
-                        [e2p(k,1) e2p(k,1) e2p(k,1) ...
-                        e2p(k,2) e2p(k,2) e2p(k,2) ...
-                        e2p(k,3) e2p(k,3) e2p(k,3)];
-                end
-            end
-            
             for i=1:sizePhi
                 T(k,i,1,:) = 1/120*epsilonR(i)*edet*addition(:);
             end
         end
-        T = sparse(ii3(:), jj3(:), T(:));
+        T = sparse(TriInfo.ii3(:), TriInfo.jj3(:), T(:));
         
         G1 = EdPhi1*phi(:) + EdPhi - T*q;
         G2 = matrices.GradSq*phi(:);

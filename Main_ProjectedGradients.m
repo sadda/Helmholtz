@@ -1,16 +1,17 @@
 clear all;
 close all;
 
-tInit       = 1;
+tInit       = 1e3;
 refineMesh  = 4;
 drawResults = 1;
-IterMax     = 5000;
-alpha       = 2e-4;
+IterMax     = 10;
+alpha       = 1e-5;
 
 for meshIndex = 1:refineMesh
     % Construct mesh and determine the starting point
     if meshIndex == 1
-        load('MeshesCreated/VoidUR0Pr/Data.mat');
+%         load('MeshesCreated/VoidUR0/Data.mat');
+        load('MeshesCreated/VoidUR0_SmallGe/Data.mat');
         meshMaxElement = [max(diff(unique(TriInfo.x))); max(diff(unique(TriInfo.y)))];
         epsilon        = 2*max(meshMaxElement);
         phi            = 1/TriInfo.sizePhi*ones(TriInfo.npointRed, TriInfo.sizePhi);
@@ -26,7 +27,9 @@ for meshIndex = 1:refineMesh
     try
         save(['Ref', int2str(meshIndex)]);
     end
-    [phi, tInit] = ProjectedGradients_RunOptimization(alpha, epsilon, TriInfo, Transformation, matrices, dirName, IterMax, drawResults, phi, tInit);
+    
+    [constants, material] = ObtainData(epsilon, alpha);
+    [phi, tInit] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, tInit);
 end
 
 exit;

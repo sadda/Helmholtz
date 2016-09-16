@@ -3,36 +3,27 @@ close all;
 
 % Always check the mesh visually before working with it :)
 
-plotResults      = 1;
-prolongGermanium = 1;
-
-xRange    = [-2 2];
-yRange    = [0 3];
-requiredX = [-0.75 -0.75 -2 -2; 0.75 0.75 2 2];
-requiredY = [1.1 1.48 0 2.5; 1.4 1.8 0.96 3];
+plotResults = 1;
+xRange      = [-2 2];
+yRange      = [0 3];
+requiredX   = [-0.75 -0.75 -2 -2; 0.75 0.75 2 2];
+requiredY   = [1.1 1.48 0 2.5; 1.4 1.8 0.96 3];
+% requiredX   = [Inf Inf -2 -2; -Inf -Inf 2 2];
+% requiredY   = [1.1 1.48 0 2.5; 1.4 1.8 0.96 3];
 
 NX = 33;
 NY = 25;
 addedX = [];
 addedY = [1.445];
 results_file='MeshesCreated/VoidUR0';
+% results_file='MeshesCreated/VoidUR0_SmallGe';
 sizePhi = 4;
 
-if prolongGermanium
-    opticalCavity = [requiredX(:,1) requiredY(:,1)];
-    requiredX(1,1) = requiredX(1,1) - 0.01;
-    requiredX(2,1) = requiredX(2,1) + 0.01;
-    requiredY(1,1) = requiredY(1,1) - 0.01;
-    requiredY(2,1) = requiredY(2,1) + 0.01;
-    results_file = [results_file, 'Pr'];
-else
-    opticalCavity = [requiredX(:,1) requiredY(:,1)];
-end
 %% Create coordinates
 coordinatesX = transpose(linspace(xRange(1), xRange(2), NX));
-coordinatesX = sort(unique([coordinatesX; addedX(:); requiredX(isfinite(requiredX)); opticalCavity(:,1)]));
+coordinatesX = sort(unique([coordinatesX; addedX(:); requiredX(isfinite(requiredX))]));
 coordinatesY = transpose(linspace(yRange(1), yRange(2), NY));
-coordinatesY = sort(unique([coordinatesY; addedY(:); requiredY(isfinite(requiredY)); opticalCavity(:,2)]));
+coordinatesY = sort(unique([coordinatesY; addedY(:); requiredY(isfinite(requiredY))]));
 NX = length(coordinatesX);
 NY = length(coordinatesY);
 coordinates = [repmat(coordinatesX, NY, 1), reshape(transpose(repmat(coordinatesY, 1, NX)), [], 1)];
@@ -54,7 +45,7 @@ end
 
 
 
-[TriInfo, Transformation] = MeshCreateMatrices1(x,y,e2p,requiredX,requiredY,sizePhi,opticalCavity);
+[TriInfo, Transformation] = MeshCreateMatrices1(x,y,e2p,requiredX,requiredY,sizePhi);
 [Transformation, TriInfo, matrices] = MeshCreateMatrices2(Transformation, TriInfo);
 matrices.H1scalProlong =  TriInfo.phiProlongationMatrix6'*matrices.H1scal*TriInfo.phiProlongationMatrix6;
 save('Data', 'Transformation', 'TriInfo', 'matrices');

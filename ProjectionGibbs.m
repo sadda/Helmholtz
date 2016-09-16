@@ -1,4 +1,4 @@
-function [phiProj,lambdaProj,resGibbs,iteration] = projection2Gibbs(phiCenter,phi0,matrices,lambda0,TriInfo)
+function [phiProj,lambdaProj,resGibbs,iteration] = ProjectionGibbs(phiCenter,phi0,matrices,lambda0,TriInfo)
     if isempty(lambda0)
         lambdaProj = rand(size(phiCenter(:)));
     else

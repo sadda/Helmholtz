@@ -22,16 +22,15 @@ function [Transformation, TriInfo, matrices] = MeshCreateMatrices2(Transformatio
     OneTrans_aa = zeros(nelement,sizePhi,sizePhi,nphi^2); % entry of bilinear form
     
     Mloc_aa = zeros(nelement,sizePhi,sizePhi,nphi^2); % entry of bilinear form
-    MlocD_aa = zeros(nelement,sizePhi,sizePhi,nphi^2); % entry of bilinear form
-    
-    Id_aa = zeros(nelement,sizePhi,nphi);
-    IdD_aa = zeros(nelement,sizePhi,nphi);
+    Id_aa   = zeros(nelement,sizePhi,nphi);
     
     ii1      = zeros(nelement,2,sizePhi,nphi^2);
     jj1      = zeros(nelement,2,sizePhi,nphi^2);
     ii2      = zeros(nelement,sizePhi,2,nphi^2);
     jj2      = zeros(nelement,sizePhi,2,nphi^2);
-    
+    ii3      = zeros(nelement,sizePhi,1,nphi^2);
+    jj3      = zeros(nelement,sizePhi,1,nphi^2);
+
     % 2D -- regarding u or p
     ii_ela = zeros(nelement,2,2,nphi^2); % sparse i-index
     jj_ela = zeros(nelement,2,2,nphi^2); % sparse j-index
@@ -40,10 +39,6 @@ function [Transformation, TriInfo, matrices] = MeshCreateMatrices2(Transformatio
     jjv = zeros(nelement,2,nphi); % sparse j-index
     
     H1scal2D_aa = zeros(nelement,2,2,nphi^2);
-    TrD_aa  = zeros(nelement,2,nphi);
-    TrXD_aa = zeros(nelement,2,nphi);
-    TrYD_aa = zeros(nelement,2,nphi);
-    TrSqD_aa = zeros(nelement,2,2,nphi^2);
     normESq_aa = zeros(nelement,2,2,nphi^2);
     
     Mloc2D_aa = zeros(nelement,2,2,nphi^2);
@@ -151,6 +146,18 @@ function [Transformation, TriInfo, matrices] = MeshCreateMatrices2(Transformatio
                     e2p(k,3) e2p(k,3) e2p(k,3)];
             end
         end
+        for i1=1:sizePhi
+            for j1=1:1
+                ii3( k,i1,j1,: ) = (i1-1)*npoint + ...
+                    [e2p(k,1) e2p(k,2) e2p(k,3) ...
+                    e2p(k,1) e2p(k,2) e2p(k,3) ...
+                    e2p(k,1) e2p(k,2) e2p(k,3)];
+                jj3( k,i1,j1,: ) = (j1-1)*npoint + ...
+                    [e2p(k,1) e2p(k,1) e2p(k,1) ...
+                    e2p(k,2) e2p(k,2) e2p(k,2) ...
+                    e2p(k,3) e2p(k,3) e2p(k,3)];
+            end
+        end
         
         % 2D -- regarding u or p
         for i1=1:2
@@ -187,21 +194,6 @@ function [Transformation, TriInfo, matrices] = MeshCreateMatrices2(Transformatio
         Id2D_aa(k,1,:) = Id_aux;
         Id2D_aa(k,2,:) = Id_aux;
         
-        if TriInfo.ideCavity(k); % optical cavity
-            TrSqD_aa(k,1,1,:) = slocxx(:);
-            TrSqD_aa(k,2,2,:) = slocyy(:);
-            TrSqD_aa(k,1,2,:) = slocxy(:);
-            TrSqD_aa(k,2,1,:) = slocyx(:);
-            
-            TrD_aa(k,1,:) = slocx;
-            TrD_aa(k,2,:) = slocy;
-            TrXD_aa(k,1,:) = slocx;
-            TrYD_aa(k,2,:) = slocy;
-            
-            MlocD_aa(k,1,1,:) = mloc(:);
-            IdD_aa(k,1,:)=Id_aux;
-        end
-        
         edet_aa(k,1,1,1)    = edet;
         mloc_aa(k,1,1,:)    = mloc(:);
         slocx_aa(k,1,1,:)   = slocx(:);
@@ -229,47 +221,35 @@ function [Transformation, TriInfo, matrices] = MeshCreateMatrices2(Transformatio
     end
     
     % 6D -- regarding phi
-    H1scal=sparse(ii_Phi(:),jj_Phi(:),H1scal_aa(:));
-    GradSq=sparse(ii_Phi(:),jj_Phi(:),GradSq_aa(:));
-    OneTrans=sparse(ii_Phi(:),jj_Phi(:),OneTrans_aa(:));
-    
-    Mloc=sparse(ii_Phi(:),jj_Phi(:),Mloc_aa(:));
-    MlocD=sparse(ii_Phi(:),jj_Phi(:),MlocD_aa(:));
-    Id = sparse(iiv_Phi(:),jjv_Phi(:),Id_aa(:));
-    IdD=sparse(iiv_Phi(:),jjv_Phi(:),IdD_aa(:));
+    H1scal   = sparse(ii_Phi(:),jj_Phi(:),H1scal_aa(:));
+    GradSq   = sparse(ii_Phi(:),jj_Phi(:),GradSq_aa(:));
+    OneTrans = sparse(ii_Phi(:),jj_Phi(:),OneTrans_aa(:));
+    Mloc     = sparse(ii_Phi(:),jj_Phi(:),Mloc_aa(:));
+    Id       = sparse(iiv_Phi(:),jjv_Phi(:),Id_aa(:));
     
     % 2D -- regarding u or p
     H1scal2D = sparse(ii_ela(:),jj_ela(:),H1scal2D_aa(:));
-    TrSqD = sparse(ii_ela(:),jj_ela(:),TrSqD_aa(:));
-    TrD   = sparse(iiv(:),jjv(:),TrD_aa(:));
-    TrXD  = sparse(iiv(:),jjv(:),TrXD_aa(:));
-    TrYD  = sparse(iiv(:),jjv(:),TrYD_aa(:));
+    normESq  = sparse(ii_ela(:),jj_ela(:),normESq_aa(:));
+    Mloc2D   = sparse(ii_ela(:),jj_ela(:),Mloc2D_aa(:));
+    Tr2D     = sparse(ii_ela(:),jj_ela(:),Tr2D_aa(:));
+    Id2D     = sparse(iiv(:),jjv(:),Id2D_aa(:));
     
-    normESq=sparse(ii_ela(:),jj_ela(:),normESq_aa(:));
-    
-    Mloc2D = sparse(ii_ela(:),jj_ela(:),Mloc2D_aa(:));
-    Tr2D   = sparse(ii_ela(:),jj_ela(:),Tr2D_aa(:));
-    
-    Id2D   = sparse(iiv(:),jjv(:),Id2D_aa(:));
-    
-    matrices = struct('Mloc',Mloc,'MlocD',MlocD,'Id',Id,'IdD',IdD,...
-        'H1scal',H1scal,'H1scal2D',H1scal2D,'OneTrans',OneTrans,...
-        'Mloc2D',Mloc2D,'Tr2D',Tr2D,'TrSqD', TrSqD, 'TrD', TrD, 'TrXD', TrXD, 'TrYD', TrYD, 'normESq',normESq,'Id2D',Id2D,'GradSq',GradSq,...
+    matrices = struct('Mloc',Mloc,'Id',Id,'H1scal',H1scal,'H1scal2D',H1scal2D,'OneTrans',OneTrans,...
+        'Mloc2D',Mloc2D,'Tr2D',Tr2D,'normESq',normESq,'Id2D',Id2D,'GradSq',GradSq,...
         'edet_aa',edet_aa,'slocx_aa',slocx_aa,'slocx3a_aa',slocx3a_aa,'slocx3b_aa',slocx3b_aa,'slocxx_aa',slocxx_aa,'slocy_aa',slocy_aa,'slocy3a_aa',slocy3a_aa,'slocy3b_aa',slocy3b_aa,'slocyy_aa',slocyy_aa,'mloc_aa',mloc_aa,'slocxy_aa',slocxy_aa,'slocyx_aa',slocyx_aa,...
         'slocxx1_aa',slocxx1_aa,'slocxx2_aa',slocxx2_aa,'slocxx3_aa',slocxx3_aa,'slocyy1_aa',slocyy1_aa,'slocyy2_aa',slocyy2_aa,'slocyy3_aa',slocyy3_aa,'slocxy1_aa',slocxy1_aa,'slocxy2_aa',slocxy2_aa,'slocxy3_aa',slocxy3_aa,'slocyx1_aa',slocyx1_aa,'slocyx2_aa',slocyx2_aa,'slocyx3_aa',slocyx3_aa);
     
-    TriInfo.indicesIiPhi=iiv_Phi;
-    TriInfo.indicesJjPhi=jjv_Phi;
-    
-    TriInfo.indicesIPhi=ii_Phi;
-    TriInfo.indicesJPhi=jj_Phi;
-    
-    TriInfo.NeumannA_lap=GradSq;
+    TriInfo.indicesIiPhi = iiv_Phi;
+    TriInfo.indicesJjPhi = jjv_Phi;
+    TriInfo.indicesIPhi  = ii_Phi;
+    TriInfo.indicesJPhi  = jj_Phi;
     
     TriInfo.ii1          = ii1;
     TriInfo.ii2          = ii2;
+    TriInfo.ii3          = ii3;
     TriInfo.jj1          = jj1;
-    TriInfo.jj2          = jj2;
+    TriInfo.jj2          = jj2;    
+    TriInfo.jj3          = jj3;    
     TriInfo.indicesIEla  = ii_ela;
     TriInfo.indicesJEla  = jj_ela;
     TriInfo.indicesIElav = iiv;

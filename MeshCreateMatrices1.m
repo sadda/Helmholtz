@@ -1,4 +1,4 @@
-function [TriInfo, Transformation] = MeshCreateMatrices1(x,y,e2p,requiredX,requiredY,sizePhi,opticalCavity)
+function [TriInfo, Transformation] = MeshCreateMatrices1(x,y,e2p,requiredX,requiredY,sizePhi)
     nelement = size(e2p,1);
     npoint   = length(x);
     nphi     = 3;
@@ -11,7 +11,6 @@ function [TriInfo, Transformation] = MeshCreateMatrices1(x,y,e2p,requiredX,requi
     
     %% Create  (required positions)
     ide       = 60*ones(size(e2p,1),1);
-    ideCavity = zeros(size(e2p,1),1);
     for k=1:nelement
         % Start assigning elements (artificially prescribed air will be rewritten). AIR MUST BE LAST.
         if length(requiredX) > sizePhi && (max(x(e2p(k,:))) <= requiredX(1,sizePhi+1)+tol || min(x(e2p(k,:))) >= requiredX(2,sizePhi+1)-tol)
@@ -24,9 +23,6 @@ function [TriInfo, Transformation] = MeshCreateMatrices1(x,y,e2p,requiredX,requi
             if min(x(e2p(k,:))) >= requiredX(1,m)-tol && max(x(e2p(k,:))) <= requiredX(2,m)+tol && min(y(e2p(k,:))) >= requiredY(1,m)-tol && max(y(e2p(k,:))) <= requiredY(2,m)+tol
                 ide(k) = m;
             end
-        end
-        if min(x(e2p(k,:))) >= opticalCavity(1,1)-tol && max(x(e2p(k,:))) <= opticalCavity(2,1)+tol && min(y(e2p(k,:))) >= opticalCavity(1,2)-tol && max(y(e2p(k,:))) <= opticalCavity(2,2)+tol % Optical cavity
-            ideCavity(k) = 1;
         end
     end
     
@@ -89,7 +85,7 @@ function [TriInfo, Transformation] = MeshCreateMatrices1(x,y,e2p,requiredX,requi
     
     npointRed              = sum(phiRowsFree);
     
-    TriInfo = struct('x',x,'y',y,'requiredX',requiredX,'requiredY',requiredY,'npoint',npoint,'npointRed',npointRed,'nelement',nelement,'e2p',e2p,'idp',idp,'ide',ide,'ideCavity',ideCavity,'opticalCavity',opticalCavity,'nphi',nphi,'sizePhi',sizePhi,'phiProlongationMatrix',phiProlongationMatrix,'phiProlongationMatrix6',phiProlongationMatrix6,'phiProlongationVector',phiProlongationVector,'phiRowsFree',phiRowsFree,'phiRowsFree6',phiRowsFree6);
+    TriInfo = struct('x',x,'y',y,'requiredX',requiredX,'requiredY',requiredY,'npoint',npoint,'npointRed',npointRed,'nelement',nelement,'e2p',e2p,'idp',idp,'ide',ide,'nphi',nphi,'sizePhi',sizePhi,'phiProlongationMatrix',phiProlongationMatrix,'phiProlongationMatrix6',phiProlongationMatrix6,'phiProlongationVector',phiProlongationVector,'phiRowsFree',phiRowsFree,'phiRowsFree6',phiRowsFree6);
 end
 
 function [edet,dFinv]=generatetransformation(k,e2p,x,y)

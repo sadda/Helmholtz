@@ -22,7 +22,7 @@ function [Transformation, TriInfo, matrices, prolongedData] = MeshCreateProlong(
     % Do extra refinement
     if extraRefinement
         refinedTriangles = zeros(size(e2p,1), 1);
-        TriInfo = MeshCreateMatrices1(coordinates(:,1),coordinates(:,2),e2p,TriInfoOld.requiredX,TriInfoOld.requiredY,TriInfoOld.sizePhi,TriInfoOld.opticalCavity);
+        TriInfo = MeshCreateMatrices1(coordinates(:,1),coordinates(:,2),e2p,TriInfoOld.requiredX,TriInfoOld.requiredY,TriInfoOld.sizePhi);
         phiProlonged = ProlongPhiMesh(phi, TriInfoOld, TriInfo);
         phiProlonged(~TriInfo.phiRowsFree,:) = [];
         phiProlonged = ProlongPhi(phiProlonged, TriInfo);
@@ -37,7 +37,7 @@ function [Transformation, TriInfo, matrices, prolongedData] = MeshCreateProlong(
         [coordinates, e2p, prolongedData] = refine(coordinates, e2p, logical(refinedTriangles), prolongedData);
     end
     % Recompute data
-    [TriInfo, Transformation] = MeshCreateMatrices1(coordinates(:,1),coordinates(:,2),e2p,TriInfoOld.requiredX,TriInfoOld.requiredY,TriInfoOld.sizePhi,TriInfoOld.opticalCavity);
+    [TriInfo, Transformation] = MeshCreateMatrices1(coordinates(:,1),coordinates(:,2),e2p,TriInfoOld.requiredX,TriInfoOld.requiredY,TriInfoOld.sizePhi);
     [Transformation, TriInfo, matrices] = MeshCreateMatrices2(Transformation, TriInfo);
     matrices.H1scalProlong =  TriInfo.phiProlongationMatrix6'*matrices.H1scal*TriInfo.phiProlongationMatrix6;
     
