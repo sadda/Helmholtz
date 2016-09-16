@@ -1,4 +1,4 @@
-function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,computeG,yEigen)
+function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,computeG,dataEigen)
     
     if nargin < 7
         computeG = 1;
@@ -20,7 +20,6 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
     constants.epsilonR      = [4.2 3.4 3.4 2 1.5 1].^2;
     constants.epsilonR(2:3) = [];
     epsilonR                = constants.epsilonR;
-    
     
     id             = ~[idp(1:npoint)==1;idp(1:npoint)==1];
     id1D           = ~[idp(1:npoint)==1];
@@ -46,6 +45,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
     % C(phi)e(u):e(v) -> u
     for i=1:TriInfo.sizePhi
         phiAux = phi(:,i);
+        phiAux = ComputePhiCutoff(phiAux);
         sumPhi = sum(phiAux(e2p),2);
         AEla12_11_1 = AEla12_11_1 + (2/3*mu(i)+1/3*lambda(i))*sumPhi;
         AEla12_11_2 = AEla12_11_2 + 1/3*mu(i)*sumPhi;
@@ -92,7 +92,8 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
     
     %% Compute Theta and eigen
     
-    phiSum = sum(phi.*repmat(epsilonR,npoint,1),2);
+    phiSum = ComputePhiCutoffEigen(phi);
+    phiSum = sum(phiSum.*repmat(epsilonR,npoint,1),2);
     % phi*Theta*v -> Theta
     T = zeros(nelement,1,1,9);
     for k=1:nelement
@@ -118,13 +119,30 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
     S     = matrices.GradSq(id1D,id1D);
     M     = matrices.Mloc(id1D,id1D);
     
-    shift   = max(epsilonR);
+    if isKey(dataEigen, dataEigen(-1))
+        data        = dataEigen(dataEigen(-1));
+        yEigen      = data{1};
+        lambdaEigen = data{2};
+        phiEigen    = data{3};
+        constM      = 1+1e-3;
+        constL      = max(epsilonR);
+        constCP     = 2*pi^2/((max(TriInfo.x)-min(TriInfo.x))*(max(TriInfo.y)-min(TriInfo.y)));
+        constEigen  = constL*(constCP^2+1)*(2*constM*constCP^2+1)/(constCP^2);
+        phiDiff     = phi - phiEigen;
+        shift2      = -lambdaEigen + constEigen*sqrt(phiDiff(:)'*matrices.Mloc*phiDiff(:));
+        shift2      = shift2 + 1e-5;
+    else
+        yEigen      = rand(sum(id1D),1);
+        shift2      = Inf;
+    end
+    
+    shift1  = max(epsilonR);
+    shift   = min(shift1, shift2);
+    
     maxIter = 200;
+    
     R       = chol(S-T+shift*M);
     Theta   = zeros(npoint,1);
-    if ~exist('yEigen', 'var') || isempty(yEigen);
-        yEigen = rand(sum(id1D),1);
-    end
     for i=1:maxIter
         x      = yEigen / norm(yEigen);
         Mx     = M*x;
@@ -144,6 +162,13 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
     if median(Theta) < 0
         Theta = -Theta;
     end
+        
+    dataEigen(dataEigen(-1)) = {yEigen, eigen, phi};
+    
+    %     eigenOpt.v0 = yEigen;
+    %     qwe = eigs(S-T+shift*M, M, 1, 'sm', eigenOpt);
+    %     qwe = qwe - shift;
+    %     norm(qwe-eigen)
     
     %% Compute objective
     
@@ -252,6 +277,12 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
         EdPhi1    = sparse(TriInfo.indicesIPhi(:), TriInfo.indicesJPhi(:), -A41_4(:));
         % C(w)e(u):e(p) -> u
         for m=1:sizePhi
+            pxBackup    = px;
+            pyBackup    = py;
+            cDerivative = ComputeCDerivative(phi(:,m), TriInfo);
+            px          = px.*cDerivative;
+            py          = py.*cDerivative;
+            
             aux1_1Aux = reshape(px,[],1,1,3).*slocx_aa + reshape(py,[],1,1,3).*slocy_aa;
             aux1_1    = 2/3*lambda(m)*repmat(sum(aux1_1Aux,4)./edet_aa,1,1,1,9).*slocx3b_aa;
             aux1_2Aux = reshape(px,[],1,1,3).*slocx_aa + reshape(py,[],1,1,3).*slocy_aa;
@@ -266,6 +297,9 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, yEigen] = ComputeData(phi,TriI
             aux2_4    = 2/3*mu(m)*repmat(sum(aux2_4Aux,4)./edet_aa,1,1,1,9).*slocx3b_aa;
             A42(:,m,1,:) = aux1_1 + aux2_1 + aux2_3;
             A42(:,m,2,:) = aux1_2 + aux2_2 + aux2_4;
+            
+            px = pxBackup;
+            py = pyBackup;
         end
         A42      = sparse(TriInfo.ii2(:), TriInfo.jj2(:), A42(:));
         
@@ -313,3 +347,47 @@ end
 
 
 
+
+
+function phi = ComputePhiCutoff(phi)
+    
+    delta = 1e-3;
+    a     = 1/pi*delta^4;
+    b     = pi*(1-2*delta^3)/delta^4;
+    
+    set1  = phi<0;
+    set2  = phi>=0 & phi<=delta;
+    phi(set1) = a*atan(b*phi(set1)) + delta^4;
+    phi(set2) = phi(set2) - 2*delta*(phi(set2)-delta).^3 - (phi(set2)-delta).^4;
+end
+
+function cDerivative = ComputeCDerivative(phi, TriInfo)
+    
+    delta = 1e-3;
+    a     = 1/pi*delta^4;
+    b     = pi*(1-2*delta^3)/delta^4;
+    
+    phi   = phi(TriInfo.e2p);
+    phi   = phi(:);
+    set1  = phi<0;
+    set2  = phi>=0 & phi <= delta;
+    set3  = phi>delta;
+    
+    cDerivative       = zeros(size(phi));
+    cDerivative(set1) = a*b ./ (1+(b.*phi(set1)).^2);
+    cDerivative(set2) = 1 - 6*delta*(phi(set2)-delta).^2 - 4*(phi(set2)-delta).^3;
+    cDerivative(set3) = 1;
+    cDerivative       = reshape(cDerivative, [], 3);
+    cDerivative       = mean(cDerivative, 2);
+    cDerivative       = repmat(cDerivative, 1, 3);
+end
+
+function phi = ComputePhiCutoffEigen(phi)
+    
+    delta = 1e-3;
+    
+    set1  = phi<0;
+    set2  = phi>1;
+    phi(set1) = delta*atan(phi(set1)/delta);
+    phi(set2) = 1 + delta*atan((phi(set2)-1)/delta);
+end

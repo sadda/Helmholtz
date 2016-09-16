@@ -4,8 +4,8 @@ close all;
 tInit       = 1e3;
 refineMesh  = 4;
 drawResults = 1;
-IterMax     = 10;
-alpha       = 1e-5;
+IterMax     = 100;
+alpha       = 1e-3;
 
 for meshIndex = 1:refineMesh
     % Construct mesh and determine the starting point
