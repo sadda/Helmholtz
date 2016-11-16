@@ -108,12 +108,7 @@ end
 
 function [slocx,slocxx,slocy,slocyy,slocxy,mloc,clocx,clocy]=localmatrices(edet,dFinv)
     
-    gradphip1loc(1,1) = -1;
-    gradphip1loc(2,1) = -1;
-    gradphip1loc(1,2) =  1;
-    gradphip1loc(2,2) =  0;
-    gradphip1loc(1,3) =  0;
-    gradphip1loc(2,3) =  1;
+    gradphip1loc = [-1 1 0; -1 0 1];
     
     % dphi = ndim x nphi
     dphi = dFinv'*gradphip1loc;

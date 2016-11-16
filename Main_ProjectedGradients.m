@@ -4,14 +4,13 @@ close all;
 tInit       = 1e3;
 refineMesh  = 4;
 drawResults = 1;
-IterMax     = 100;
+IterMax     = 5000;
 alpha       = 1e-3;
 
 for meshIndex = 1:refineMesh
     % Construct mesh and determine the starting point
     if meshIndex == 1
-%         load('MeshesCreated/VoidUR0/Data.mat');
-        load('MeshesCreated/VoidUR0_SmallGe/Data.mat');
+        load('MeshesCreated/Mesh_GeFree/Data.mat');
         meshMaxElement = [max(diff(unique(TriInfo.x))); max(diff(unique(TriInfo.y)))];
         epsilon        = 2*max(meshMaxElement);
         phi            = 1/TriInfo.sizePhi*ones(TriInfo.npointRed, TriInfo.sizePhi);

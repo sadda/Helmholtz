@@ -141,7 +141,12 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     
     maxIter = 200;
     
-    R       = chol(S-T+shift*M);
+    try 
+        R       = chol(S-T+shift*M);
+    catch
+        R       = chol(S-T+max(shift1,shift2)*M);
+        warning('Shift was not successful. Switching for higher shift for this iteration.');
+    end
     Theta   = zeros(npoint,1);
     for i=1:maxIter
         x      = yEigen / norm(yEigen);

@@ -47,7 +47,7 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
         end
         % Determine the next iterate
         t = min(2*t, tMax);
-        [phiProj,t,lambda,JProj,u,Theta,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen);
+        [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen);
         % Compute the optimality (the same as in the loop with t=cOptimality)
         phiCheckNew                   = phi - cOptimality*rieszGradient;
         [phiCheck,~,~,iterationGibbs] = ProjectionGibbs(phiCheckNew,phiProj,matrices,lambda,TriInfo);
@@ -197,15 +197,15 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
     end
 end
 
-function [phiProj,t,lambda,JProj,u,Theta,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen)
+function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen)
     phiProj = phi;
     while true
-        phiNew                                  = phi-t*rieszGradient;
-        [phiProj,lambda]                        = ProjectionGibbs(phiNew,phiProj,matrices,lambda,TriInfo);
-        dataEigen(-1)                           = t;
-        [JProj,~,~,~,~,~,~,~,u,Theta,dataEigen] = ComputeData(phiProj,TriInfo,Transformation,matrices,constants,material,0,dataEigen);
-        phiDiff                                 = phi-phiProj;
-        normPhiDiffSquare                       = ComputePhiNormSquare(phiDiff, TriInfo, matrices);
+        phiNew                              = phi-t*rieszGradient;
+        [phiProj,lambda]                    = ProjectionGibbs(phiNew,phiProj,matrices,lambda,TriInfo);
+        dataEigen(-1)                       = t;
+        [JProj,~,~,~,~,~,~,~,~,~,dataEigen] = ComputeData(phiProj,TriInfo,Transformation,matrices,constants,material,0,dataEigen);
+        phiDiff                             = phi-phiProj;
+        normPhiDiffSquare                   = ComputePhiNormSquare(phiDiff, TriInfo, matrices);
         if JProj-J <= -(sigma/t)*normPhiDiffSquare || t < tMin
             break;
         else
