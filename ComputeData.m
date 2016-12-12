@@ -1,5 +1,9 @@
 function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,computeG,dataEigen)
     
+    if nargin < 8 || isempty(dataEigen)
+        dataEigen     = containers.Map('KeyType','double','ValueType','any');
+        dataEigen(-1) = 0;
+    end
     if nargin < 7
         computeG = 1;
     end
@@ -20,6 +24,10 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     constants.epsilonR      = [4.2 3.4 3.4 2 1.5 1].^2;
     constants.epsilonR(2:3) = [];
     epsilonR                = constants.epsilonR;
+    constants.regThetaL1 = 1e1;
+constants.regPhiL1   = 0;
+constants.regPhiL2   = 0;
+    
     
     id             = ~[idp(1:npoint)==1;idp(1:npoint)==1];
     id1D           = ~[idp(1:npoint)==1];
@@ -112,12 +120,12 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         T(k,1,1,:) = 1/120*edet*addition(:);
     end
     
-    ii1D  = TriInfo.indicesIPhi(:,1,1,:);
-    jj2D  = TriInfo.indicesJPhi(:,1,1,:);
-    T     = sparse(ii1D(:), jj2D(:), T(:));
-    T     = T(id1D,id1D);
-    S     = matrices.GradSq(id1D,id1D);
-    M     = matrices.Mloc(id1D,id1D);
+    ii1D = TriInfo.indicesIPhi(:,1,1,:);
+    jj2D = TriInfo.indicesJPhi(:,1,1,:);
+    T    = sparse(ii1D(:), jj2D(:), T(:));
+    T    = T(id1D,id1D);
+    S    = matrices.GradSq(id1D,id1D);
+    M    = matrices.Mloc(id1D,id1D);
     
     if isKey(dataEigen, dataEigen(-1))
         data        = dataEigen(dataEigen(-1));
@@ -132,22 +140,20 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         shift2      = -lambdaEigen + constEigen*sqrt(phiDiff(:)'*matrices.Mloc*phiDiff(:));
         shift2      = shift2 + 1e-5;
     else
-        yEigen      = rand(sum(id1D),1);
+        yEigen      = ones(sum(id1D),1);
         shift2      = Inf;
     end
     
     shift1  = max(epsilonR);
     shift   = min(shift1, shift2);
+    maxIter = 2000;
     
-    maxIter = 200;
-    
-    try 
-        R       = chol(S-T+shift*M);
+    try
+        R = chol(S-T+shift*M);
     catch
-        R       = chol(S-T+max(shift1,shift2)*M);
+        R = chol(S-T+max(shift1,shift2)*M);
         warning('Shift was not successful. Switching for higher shift for this iteration.');
     end
-    Theta   = zeros(npoint,1);
     for i=1:maxIter
         x      = yEigen / norm(yEigen);
         Mx     = M*x;
@@ -159,21 +165,23 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         end
     end
     if i == maxIter
-        warning('Maximum number of iterations for eigenvalue computation exceeded');
+        if norm(res) <= 1e-6
+            if norm(res) >= 1e-10
+                warning('Maximum number of iterations for eigenvalue computation exceeded. The tolerance is still pretty low. This may happen at the beginning of projected gradients.');
+            end
+        else
+            error('Maximum number of iterations for eigenvalue computation exceeded');
+        end
     end
+    Theta       = zeros(npoint,1);
     Theta(id1D) = x;
     eigen       = eigen - shift;
     Theta       = Theta / sqrt(Theta'*matrices.Mloc(1:npoint,1:npoint)*Theta);
-    if median(Theta) < 0
+    if mean(Theta) < 0
         Theta = -Theta;
     end
-        
-    dataEigen(dataEigen(-1)) = {yEigen, eigen, phi};
     
-    %     eigenOpt.v0 = yEigen;
-    %     qwe = eigs(S-T+shift*M, M, 1, 'sm', eigenOpt);
-    %     qwe = qwe - shift;
-    %     norm(qwe-eigen)
+    dataEigen(dataEigen(-1)) = {yEigen, eigen, phi};
     
     %% Compute objective
     
@@ -228,7 +236,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         
         B11 = S-T-eigen*M;
         B12 = -M*Theta(id1D);
-        B21 = (M*Theta(id1D))';
+        B21 = (-M*Theta(id1D))';
         B22 = 0;
         
         B     = [B11 B12; B21 B22];
