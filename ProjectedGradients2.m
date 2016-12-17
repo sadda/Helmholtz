@@ -1,4 +1,10 @@
 function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, tInitial, dataEigen)
+
+    options = [];
+    options.computeU = 0;
+    options.symmetrize = 1;
+    options.separateObjective = 1;
+
     
     if nargin < 11 || isempty(dataEigen)
         dataEigen = containers.Map('KeyType','double','ValueType','any');
@@ -34,14 +40,16 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformatio
     resAll        = nan(IterMax, 1);
     lambda        = zeros(size(phi));
     phiProj       = phi;
-    [JProj,~,~,~,~,~,~,~,~,~,dataEigen] = ComputeData2(phi,TriInfo,Transformation,matrices,constants,material,0,dataEigen);
+    options.computeG = 0;
+    [JProj,~,~,~,~,~,~,~,~,~,dataEigen] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
     
     while res > TOLabs && iteration < IterMax && abs(t) >= tMin
         tic;
         phi           = phiProj;
         J             = JProj;
         dataEigen(-1) = 0;
-        [~,gradient,~,~,~,~,~,~,~,~,dataEigen]  = ComputeData2(phi,TriInfo,Transformation,matrices,constants,material,1,dataEigen);
+        options.computeG = 1;
+        [~,gradient,~,~,~,~,~,~,~,~,dataEigen]  = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
         rieszGradient = ComputeRieszGradient(gradient, TriInfo, matrices);
         rieszGradient = reshape(rieszGradient,[],sizePhi);
         
@@ -67,7 +75,7 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformatio
         end
         % Determine the next iterate
         t = min(2*t, tMax);
-        [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen);
+        [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen,options);
         % Compute the optimality (the same as in the loop with t=cOptimality)
         phiCheckNew                   = phi - cOptimality*rieszGradient;
         [phiCheck,~,~,iterationGibbs] = ProjectionGibbs(phiCheckNew,phiProj,matrices,lambda,TriInfo);
@@ -99,7 +107,8 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformatio
         iteration = iteration + 1;
     end
     
-    [J, ~, J1, J2, J3, ~, ~, ~, ~, Theta] = ComputeData2(phi,TriInfo,Transformation,matrices,constants,material,0,dataEigen);
+    options.computeG = 0;
+    [J, ~, J1, J2, J3, ~, ~, ~, ~, Theta] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
     
     fprintf('\n%13s %13s %13s %13s |\n', 'Objective', 'Objective1', 'Objective2', 'Objective3');
     fprintf('   %4.4e    %4.4e    %4.4e    %4.4e |\n', J, J1, J2, J3);
@@ -176,7 +185,8 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformatio
                 saveas(gcf, filename, 'jpg');
             end
             
-            [~, ~, ~, ~, ~, ~, ~, ~, u, Theta] = ComputeData2(phiNew,TriInfo,Transformation,matrices,constants,material,0,dataEigen);
+            options.computeG = 0;
+            [~, ~, ~, ~, ~, ~, ~, ~, u, Theta] = ComputeData(phiNew,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
             
             set(gcf,'Visible','off');
             filename = fullfile(dirName, ['Ux_iterate', num2str(iteration), '.jpg']);
@@ -218,13 +228,14 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformatio
     end
 end
 
-function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen)
+function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen,options)
     phiProj = phi;
     while true
         phiNew                              = phi-t*rieszGradient;
         [phiProj,lambda]                    = ProjectionGibbs(phiNew,phiProj,matrices,lambda,TriInfo);
         dataEigen(-1)                       = t;
-        [JProj,~,~,~,~,~,~,~,~,~,dataEigen] = ComputeData2(phiProj,TriInfo,Transformation,matrices,constants,material,0,dataEigen);
+        options.computeG = 0;
+        [JProj,~,~,~,~,~,~,~,~,~,dataEigen] = ComputeData(phiProj,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
         phiDiff                             = phi-phiProj;
         normPhiDiffSquare                   = ComputePhiNormSquare(phiDiff, TriInfo, matrices);
         % You have to have isequal(phi, phiProj). The problem is the way into which you pass parameters into ComputeData2. If you compute Theta for phi,
