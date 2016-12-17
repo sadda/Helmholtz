@@ -50,10 +50,10 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformatio
         
         
         
-        if SymmetryError(rieszGradient, TriInfo) >= 1e-8
+        if SymmetryError(rieszGradient, TriInfo, 1) >= 1e-8
             error('Symmetriation procedure failed');
         end
-        rieszGradient = SymmetryCompute(rieszGradient, TriInfo);
+        rieszGradient = SymmetryCompute(rieszGradient, TriInfo, 1);
         
         
         
@@ -240,10 +240,21 @@ function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradi
     
     
     
-    if SymmetryError(phiProj, TriInfo) >= 1e-8
+%     if t < tMin
+if t<1
+%        save('qwe');
+       
+try
+        Test3_Gradient
+end    
+%        wefpokwpefokwe
+    end
+    
+    
+    if SymmetryError(phiProj, TriInfo, 1) >= 1e-8
         error('Symmetriation procedure failed');
     end
-    phiProj = SymmetryCompute(phiProj, TriInfo);
+    phiProj = SymmetryCompute(phiProj, TriInfo, 1);
     
     
 end

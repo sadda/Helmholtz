@@ -1,8 +1,7 @@
 clear all;
 close all;
 
-addpath('./p1afem');
-addpath(genpath('./knedlsepp-p1afem-nD-26232ef'));
+addpath(genpath('./P1AFEM'));
 
 tInit        = 1e3;
 refineMesh   = 5;
@@ -112,25 +111,6 @@ for meshIndex = 1:refineMesh
         end
         clear fig;
         
-        
-        
-        %         [Transformation, TriInfo, matrices, phi] = MeshCreateProlong(TriInfo, phiProlonged, 0, 1.5*meshMaxElement, phiProlonged);
-        %         if extraRefinement
-        %             refinedTriangles = zeros(size(e2p,1), 1);
-        %             TriInfo = MeshCreateMatrices1(coordinates(:,1),coordinates(:,2),e2p,TriInfoOld.requiredX,TriInfoOld.requiredY,TriInfoOld.sizePhi);
-        %             phiProlonged = ProlongPhiMesh(phi, TriInfoOld, TriInfo);
-        %             phiProlonged(~TriInfo.phiRowsFree,:) = [];
-        %             phiProlonged = ProlongPhi(phiProlonged, TriInfo);
-        %             for k = 1:size(e2p,1)
-        %                 values = phiProlonged(e2p(k,:),:);
-        %                 if any(values(:) < 1 - tol & values(:) > tol) || norm(values(1,:) - values(2,:)) > tol || norm(values(1,:) - values(3,:)) > tol % Difference in phi
-        %                     if max(diff(sort(coordinates(e2p(k,:),1)))) >= 0.5*meshMaxElement(1) && max(diff(sort(coordinates(e2p(k,:),2)))) >= 0.5*meshMaxElement(2) % Element is not too small
-        %                         refinedTriangles(k) = 1;
-        %                     end
-        %                 end
-        %             end
-        %             [coordinates, e2p, prolongedData] = refine(coordinates, e2p, logical(refinedTriangles), prolongedData);
-        %         end
         % Recompute data
         [TriInfo, Transformation] = MeshCreateMatrices1(coordinates(:,1),coordinates(:,2),elements,TriInfoOld.requiredX,TriInfoOld.requiredY,TriInfoOld.sizePhi);
         [Transformation, TriInfo, matrices] = MeshCreateMatrices2(Transformation, TriInfo);

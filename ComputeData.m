@@ -1,5 +1,9 @@
 function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,computeG,dataEigen)
     
+    
+    error('Do not use this. Unify it with ComputeData2');
+    
+    
     if nargin < 8 || isempty(dataEigen)
         dataEigen     = containers.Map('KeyType','double','ValueType','any');
         dataEigen(-1) = 0;

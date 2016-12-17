@@ -9,7 +9,7 @@ function [TriInfo, matrices, phi] = ModifyMatrices(fixGe, TriInfo, matrices, Tra
     fixGe                  = fixGe & sum(phiPrescribed(:,2:end), 2) == 0;
     phiPrescribed(fixGe,1) = 1;
     phiPrescribed1         = phiPrescribed(:,1);
-    
+
     TrD_aa    = zeros(TriInfo.nelement,2,TriInfo.nphi);
     totalArea = 0;
     

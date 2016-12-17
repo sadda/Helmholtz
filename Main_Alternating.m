@@ -4,31 +4,40 @@
 addpath('./OldCodes');
 addpath(genpath('./P1AFEM'));
 
-refineMesh   = 5;
+refineMesh   = 4;
 drawResults  = 0;
 iterMax      = 500;
 iterMaxIn    = 50;
 alpha        = 8e-5;
-method       = 1;
+
+
+
+% alpha = 1e-6;
+
+
+method       = 0;
 refineCount  = 2;
 coarsenCount = 2;
 
 tryNumber     = 19;
-regThetaL1All = linspace(1e-1, 1e0, tryNumber);
+regThetaL1All = linspace(1e-1, 1e-0, tryNumber);
 regPhiL1All   = linspace(0, 0, tryNumber);
 regPhiL2All   = linspace(0, 0, tryNumber);
+cutThreshold  = 0.2;
 
-% parfor tryIndex = 1:tryNumber
-% for tryIndex = 17
-parfor tryIndex2 = 16:17
-    
-    tryIndex = 2*(tryIndex2 -16)+16;
-    
-    
+% for tryIndex = 1:tryNumber
+% for tryIndex = 1:1
+    % for tryIndex = [1 5 11 19]
+    % for tryIndex = [5 11 19]
+    for tryIndex = 15
     tInit1      = 1e3;
     tInit2      = 1e3;
     
-    dirNameBase = sprintf('Results_Alternating_RegThetaL1=%1.3f', regThetaL1All(tryIndex));
+    if method == 1
+        dirNameBase = sprintf('Results_Alternating3_RegThetaL1=%1.3f', regThetaL1All(tryIndex));
+    elseif method == 0
+        dirNameBase = sprintf('Results_Alternating3_Cutoff=%1.1f', cutThreshold);
+    end
     picName     = fullfile(dirNameBase, 'Pictures');
     
     if exist(picName, 'dir')
@@ -38,7 +47,8 @@ parfor tryIndex2 = 16:17
     
     for meshIndex = 1:refineMesh
         if meshIndex == 1
-            data           = load('MeshesCreated/Mesh_GeFree/Data.mat');
+            data           = load('MeshesCreated/Mesh_GeFree_AirFree/Data.mat');
+            % data           = load('MeshesCreated/Mesh_AllFree/Data.mat');
             TriInfo        = data.TriInfo;
             matrices       = data.matrices;
             Transformation = data.Transformation;
@@ -134,6 +144,20 @@ parfor tryIndex2 = 16:17
         [constants, material]  = ObtainData(epsilon, alpha);
         material.epsilonR      = [4.2 3.4 3.4 2 1.5 1].^2;
         material.epsilonR(2:3) = [];
+        
+        
+        
+        
+        
+        material.epsilonR = (2*pi/1.64)^2*material.epsilonR;
+        
+   
+        
+        
+
+
+        
+        
         constants.regThetaL1   = regThetaL1All(tryIndex);
         constants.regPhiL1     = regPhiL1All(tryIndex);
         constants.regPhiL2     = regPhiL2All(tryIndex);
@@ -154,8 +178,8 @@ parfor tryIndex2 = 16:17
             totalArea                = TriInfo.totalArea;
             [phi, tInit1, data]      = ProjectedGradients_Old(TriInfo, Transformation, matrices, material, constants, dirName1, iterMax, drawResults, phi, tInit1);
             
-            SymmetryError(phi, TriInfo)
-            phi = SymmetryCompute(phi, TriInfo);
+            SymmetryError(phi, TriInfo, 1)
+            phi = SymmetryCompute(phi, TriInfo, 1);
             
             [TriInfo, matrices, phi] = ModifyMatrices(false(TriInfo.npoint, 1), TriInfo, matrices, Transformation, phi);
             
@@ -173,22 +197,17 @@ parfor tryIndex2 = 16:17
                 phiProlonged                     = ProlongPhi(phi, TriInfo);
                 phiGeNorm                        = sqrt(phiProlonged(:,1)'*matrices.Mloc(1:TriInfo.npoint,1:TriInfo.npoint)*phiProlonged(:,1));
                 TriInfo.phiGe                    = phiProlonged(:,1) / phiGeNorm;
-                
-                
-                % save('qwe', 'dataEigen');
-                
-                
-                
                 [phi2, tInit2, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformation, matrices, material, constants, dirName2, iterMax, drawResults, phi, tInit2, dataEigen);
                 
-                SymmetryError(phi2, TriInfo)
-                phi2 = SymmetryCompute(phi2, TriInfo);
+                SymmetryError(phi2, TriInfo, 1)
+                phi2 = SymmetryCompute(phi2, TriInfo, 1);
                 
                 phi2Prolonged                    = ProlongPhi(phi2, TriInfo);
                 fixGe                            = phi2Prolonged(:,1) > 0.99;
             else
-                [~,~,~,~,~,~,~,~,~,Theta] = ComputeData(phi, TriInfo, Transformation, matrices, constants, material, 0, []);
-                fixGe = Theta >= 0.7*max(Theta(:));
+                TriInfo.phiGe = 0;
+                [~,~,~,~,~,~,~,~,~,Theta] = ComputeData2(phi, TriInfo, Transformation, matrices, constants, material, 0, []);
+                fixGe = Theta >= cutThreshold*max(Theta(:));
             end
             
             sum(fixGe)

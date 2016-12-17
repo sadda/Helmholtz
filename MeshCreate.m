@@ -4,27 +4,39 @@ close all;
 % Always check the mesh visually before working with it :)
 
 fixGermanium = 0;
+fixSi02      = 0;
+fixAir       = 0;
 plotResults  = 1;
 xRange       = [-2 2];
 yRange       = [0 3];
-% NX           = 33;
-% NY           = 25;
 NX = 17;
 NY = 13;
 sizePhi      = 4;
-if fixGermanium
+
+if ~fixGermanium && ~fixAir && ~fixSi02
+    requiredX    = [Inf Inf Inf Inf; -Inf -Inf -Inf -Inf];
+    requiredY    = [Inf Inf Inf Inf; -Inf -Inf -Inf -Inf];
+    results_file = 'MeshesCreated/Mesh_AllFree';
+    addedX       = [];
+    addedY       = [];
+elseif ~fixGermanium && ~fixAir && fixSi02
+    requiredX    = [Inf Inf -2 Inf; -Inf -Inf 2 -Inf];
+    requiredY    = [Inf Inf 0 Inf; -Inf -Inf 1 -Inf];
+    results_file = 'MeshesCreated/Mesh_GeFree_AirFree';
+    addedX       = [];
+    addedY       = [];
+elseif ~fixGermanium && fixAir
+    requiredX    = [Inf Inf -2 -2; -Inf -Inf 2 2];
+    requiredY    = [Inf Inf 0 2.5; -Inf -Inf 1 3];
+    results_file = 'MeshesCreated/Mesh_GeFree';
+    addedX       = [];
+    addedY       = [];
+else
     requiredX    = [-0.75 -0.75 -2 -2; 0.75 0.75 2 2];
     requiredY    = [1.1 1.48 0 2.5; 1.4 1.8 0.96 3];
     results_file = 'MeshesCreated/Mesh_GeFixed';
     addedX       = [];
     addedY       = [1.445];
-else
-    requiredX    = [Inf Inf -2 -2; -Inf -Inf 2 2];
-    % requiredY    = [Inf Inf 0 2.5; -Inf -Inf 3/24*7 3];
-    requiredY    = [Inf Inf 0 2.5; -Inf -Inf 1 3];
-    results_file = 'MeshesCreated/Mesh_GeFree';
-    addedX       = [];
-    addedY       = [];
 end
 
 %% Create coordinates

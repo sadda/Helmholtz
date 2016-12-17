@@ -1,12 +1,12 @@
-function fSym = SymmetryCompute(f, TriInfo)
+function fSym = SymmetryCompute(f, TriInfo, isPhi)
     
     fOrig = f;
-    if size(f,1) > TriInfo.npoint
+    if isPhi && size(f,1) > TriInfo.npoint
         f = reshape(f, [], TriInfo.sizePhi);
     end
     fReshaped = f;
     % Reduced phi
-    if size(f,1) == TriInfo.npointRed
+    if isPhi && size(f,1) == TriInfo.npointRed
         fAux = zeros(TriInfo.npoint, size(f,2));
         for i=1:size(f,2)
             fAux(:,i) = TriInfo.phiProlongationMatrix*f(:,i);
@@ -14,7 +14,7 @@ function fSym = SymmetryCompute(f, TriInfo)
         f = fAux;
     end
     % Theta
-    if size(f,1) == sum(~TriInfo.idp)
+    if ~isPhi && size(f,1) == sum(~TriInfo.idp)
         fAux = zeros(TriInfo.npoint, size(f,2));
         fAux(~TriInfo.idp,:) = f;
         f = fAux;
@@ -33,10 +33,10 @@ function fSym = SymmetryCompute(f, TriInfo)
         fSym(ind2(h2),i) = 0.5*(g1+q2);
     end
     
-    if size(fReshaped,1) == TriInfo.npointRed
+    if isPhi && size(fReshaped,1) == TriInfo.npointRed
         fSym = fSym(TriInfo.phiRowsFree,:);
     end
-    if size(fReshaped,1) == sum(~TriInfo.idp)
+    if ~isPhi && size(fReshaped,1) == sum(~TriInfo.idp)
         fSym = fSym(~TriInfo.idp,:);
     end
     if size(fOrig,1) > TriInfo.npoint

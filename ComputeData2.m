@@ -70,7 +70,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData2(phi,
     
     shift1  = max(epsilonR);
     shift   = min(shift1, shift2);
-    maxIter = 2000;
+    maxIter = 50000;
     
     try
         R = chol(S-T+shift*M);
@@ -85,6 +85,11 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData2(phi,
         yEigen = R \ (R' \ Mx);
         eigen  = 1/(yEigen'*x);
         res    = (S-T+shift*M)*x-eigen*Mx;
+        
+        
+        resA(i) = norm(res);
+        
+        
         if norm(res) <= 1e-12
             break
         end
@@ -95,6 +100,13 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData2(phi,
                 warning('Maximum number of iterations for eigenvalue computation exceeded. The tolerance is still pretty low. This may happen at the beginning of projected gradients.');
             end
         else
+            
+            shift1
+            shift2            
+            figure; plot(log10(resA))
+            
+            
+            
             error('Maximum number of iterations for eigenvalue computation exceeded');
         end
     end
@@ -110,11 +122,11 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData2(phi,
     
     
     
-    if SymmetryError(Theta, TriInfo) >= 1e-8 || SymmetryError(Theta, TriInfo) >= 1e-8
+    if SymmetryError(Theta, TriInfo, 0) >= 1e-8 || SymmetryError(Theta, TriInfo, 0) >= 1e-8
         error('The symmetrization procedure failed');
     end
-    yEigen = SymmetryCompute(yEigen, TriInfo);
-    Theta  = SymmetryCompute(Theta, TriInfo);
+    yEigen = SymmetryCompute(yEigen, TriInfo, 0);
+    Theta  = SymmetryCompute(Theta, TriInfo, 0);
     
     
     

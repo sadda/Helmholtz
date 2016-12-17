@@ -114,11 +114,11 @@ function [J, G, J1, J21, J22, J3, G1, G21, G22, G3, u, Theta, dataEigen] = Compu
     
     
     
-    if SymmetryError(Theta, TriInfo) >= 1e-8 || SymmetryError(Theta, TriInfo) >= 1e-8
+    if SymmetryError(Theta, TriInfo, 0) >= 1e-8 || SymmetryError(Theta, TriInfo, 0) >= 1e-8
         error('The symmetrization procedure failed');
     end
-    yEigen = SymmetryCompute(yEigen, TriInfo);
-    Theta  = SymmetryCompute(Theta, TriInfo);
+    yEigen = SymmetryCompute(yEigen, TriInfo, 0);
+    Theta  = SymmetryCompute(Theta, TriInfo, 0);
     
     
     
