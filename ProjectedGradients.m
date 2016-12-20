@@ -1,7 +1,7 @@
 function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, tInitial)
     
     
-    options = [];    
+    options = [];
     options.computeU = 1;
     options.symmetrize = 0;
     options.separateObjective = 0;
@@ -41,13 +41,13 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
     options.computeG = 0;
     [JProj,~,~,~,~,~,~,~,~,~,dataEigen] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
     
-    while res > TOLabs && iteration < IterMax && abs(t) >= tMin
+    while res > TOLabs && iteration <= IterMax && abs(t) >= tMin
         tic;
         phi           = phiProj;
         J             = JProj;
         dataEigen(-1) = 0;
         options.computeG = 1;
-        [~,gradient,~,~,~,~,~,~,~,~,dataEigen]  = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
+        [~,gradient,~,~,~,~,~,~,u,Theta,dataEigen]  = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
         rieszGradient = ComputeRieszGradient(gradient, TriInfo, matrices);
         rieszGradient = reshape(rieszGradient,[],sizePhi);
         if iteration == 1
@@ -83,12 +83,16 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
         
         filename = ['Phi_iterate', num2str(iteration), '.mat'];
         save(fullfile(dirName, filename), 'phi');
+        filename = ['U_iterate', num2str(iteration), '.mat'];
+        save(fullfile(dirName, filename), 'u');
+        filename = ['Theta_iterate', num2str(iteration), '.mat'];
+        save(fullfile(dirName, filename), 'Theta');
         
-        resAll(iteration)  = res;
-        iteration = iteration + 1;
+        resAll(iteration) = res;
+        iteration         = iteration + 1;
     end
     
-    options.computeG = 0;
+    options.computeG   = 0;
     [J, ~, J1, J2, J3] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
     
     fprintf('\n%13s %13s %13s %13s |\n', 'Objective', 'Objective1', 'Objective2', 'Objective3');
@@ -98,55 +102,54 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
     save(fullfile(dirName, 'phi'), 'phi');
     save(fullfile(dirName, 'DataAll'));
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     %% Draw all figures (after finishing optimization)
     % Load phi from the files
     if exist(strcat(dirName, '/PhiAll.mat'), 'file') == 2
         load(strcat(dirName, '/PhiAll.mat'));
+        load(strcat(dirName, '/UAll.mat'));
+        load(strcat(dirName, '/ThetaAll.mat'));
     else
         fileNumber = 1;
         while exist(strcat(dirName, '/Phi_iterate', int2str(fileNumber), '.mat'), 'file') == 2
             fileNumber = fileNumber + 1;
         end
         fileNumber = fileNumber - 1;
-        load(strcat(dirName, '/Phi_iterate', int2str(1), '.mat'));
-        phiAll = zeros(fileNumber, size(phi,1), size(phi,2));
+        
+        phiAll   = zeros(fileNumber, size(phi,1), size(phi,2));
+        uAll     = zeros(fileNumber, size(u,1), size(u,2));
+        ThetaAll = zeros(fileNumber, size(Theta,1), size(Theta,2));
         for iteration=1:fileNumber
             load(strcat(dirName, '/Phi_iterate', int2str(iteration), '.mat'));
             delete(strcat(dirName, '/Phi_iterate', int2str(iteration), '.mat'));
-            phiAll(iteration+1,:,:) = phi;
+            phiAll(iteration,:,:) = phi;
+            load(strcat(dirName, '/U_iterate', int2str(iteration), '.mat'));
+            delete(strcat(dirName, '/U_iterate', int2str(iteration), '.mat'));
+            uAll(iteration,:,:) = u;
+            load(strcat(dirName, '/Theta_iterate', int2str(iteration), '.mat'));
+            delete(strcat(dirName, '/Theta_iterate', int2str(iteration), '.mat'));
+            ThetaAll(iteration,:,:) = Theta;
         end
         save(strcat(dirName, '/PhiAll.mat'), 'phiAll');
+        save(strcat(dirName, '/UAll.mat'), 'uAll');
+        save(strcat(dirName, '/ThetaAll.mat'), 'ThetaAll');
     end
     if drawResults
         fileNumberSpace = 200;
-        fileNumber = size(phiAll, 1);
-        figureNumber = 1 + ceil(fileNumber / fileNumberSpace);
+        fileNumber      = size(phiAll, 1);
+        figureNumber    = 1 + ceil(fileNumber / fileNumberSpace);
         if figureNumber <= 0 || figureNumber >= fileNumber
             figureNumber = fileNumber;
         end
-        if figureNumber > 1 || ~exist('minIndex', 'var') % A bit hack here
-            iterationAll = floor(linspace(1, fileNumber-1, figureNumber));
+        if figureNumber > 1 || ~exist('minIndex', 'var')
+            iterationAll = floor(linspace(1, fileNumber, figureNumber));
         else
             iterationAll = minIndex;
         end
         colormap jet;
         for iteration=iterationAll
-            phi = squeeze(phiAll(iteration+1,:,:));
+            phi          = squeeze(phiAll(iteration,:,:));
+            u            = squeeze(uAll(iteration,:))';
+            Theta        = squeeze(ThetaAll(iteration,:))';
             phiProlonged = ProlongPhi(phi, TriInfo);
             
             set(gcf,'Visible','off');
@@ -164,9 +167,6 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
                 trisurf(e2p, x, y, phiProlonged(:,i));
                 saveas(gcf, filename, 'jpg');
             end
-            
-            options.computeG = 0;
-            [~, ~, ~, ~, ~, ~, ~, ~, u, Theta] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
             
             set(gcf,'Visible','off');
             filename = fullfile(dirName, ['Ux_iterate', num2str(iteration), '.jpg']);

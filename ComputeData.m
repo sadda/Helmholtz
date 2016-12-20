@@ -164,7 +164,20 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             break
         end
     end
+
+    Theta       = zeros(npoint,1);
+    Theta(id1D) = x;
+    eigen       = eigen - shift;
+    Theta       = Theta / sqrt(Theta'*matrices.Mloc(1:npoint,1:npoint)*Theta);
+    if mean(Theta) < 0
+        Theta = -Theta;
+    end
     if i == maxIter
+        
+        
+        PlotFunction(Theta, TriInfo);
+        
+        
         if norm(res) <= 1e-6
             if norm(res) >= 1e-10
                 warning('Maximum number of iterations for eigenvalue computation exceeded. The tolerance is still pretty low. This may happen at the beginning of projected gradients.');
@@ -173,13 +186,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             error('Maximum number of iterations for eigenvalue computation exceeded');
         end
     end
-    Theta       = zeros(npoint,1);
-    Theta(id1D) = x;
-    eigen       = eigen - shift;
-    Theta       = Theta / sqrt(Theta'*matrices.Mloc(1:npoint,1:npoint)*Theta);
-    if mean(Theta) < 0
-        Theta = -Theta;
-    end
+    
     if options.symmetrize
         if SymmetryError(Theta, TriInfo, 0) >= 1e-8 || SymmetryError(Theta, TriInfo, 0) >= 1e-8
             error('The symmetrization procedure failed');
