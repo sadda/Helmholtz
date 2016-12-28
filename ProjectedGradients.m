@@ -59,7 +59,7 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
         [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen,options);
         % Compute the optimality (the same as in the loop with t=cOptimality)
         phiCheckNew                   = phi - cOptimality*rieszGradient;
-        [phiCheck,~,~,iterationGibbs] = ProjectionGibbs(phiCheckNew,phiProj,matrices,lambda,TriInfo);
+        [phiCheck,~,~,iterationGibbs] = ProjectionGibbs(phiCheckNew,phiProj,matrices,lambda,TriInfo,options);
         phiDiff                       = phi - phiCheck;
         res                           = sqrt(ComputePhiNormSquare(phiDiff, TriInfo, matrices));
         
@@ -213,7 +213,7 @@ function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradi
     phiProj = phi;
     while true
         phiNew                              = phi-t*rieszGradient;
-        [phiProj,lambda]                    = ProjectionGibbs(phiNew,phiProj,matrices,lambda,TriInfo);
+        [phiProj,lambda]                    = ProjectionGibbs(phiNew,phiProj,matrices,lambda,TriInfo,options);
         dataEigen(-1)                       = t;
         options.computeG = 0;
         [JProj,~,~,~,~,~,~,~,~,~,dataEigen] = ComputeData(phiProj,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
@@ -225,6 +225,13 @@ function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradi
             t = 0.5*t;
         end
     end
+    
+    
+    Test2_GradientFun(phi,TriInfo,Transformation,matrices,constants,material,options)
+    
+    
+    
+    
 end
 
 

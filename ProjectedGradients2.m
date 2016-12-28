@@ -1,10 +1,9 @@
 function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, tInitial, dataEigen)
-
+    
     options = [];
     options.computeU = 0;
-    options.symmetrize = 1;
+    options.symmetrize = 0;
     options.separateObjective = 1;
-
     
     if nargin < 11 || isempty(dataEigen)
         dataEigen = containers.Map('KeyType','double','ValueType','any');
@@ -54,18 +53,9 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformatio
         rieszGradient = reshape(rieszGradient,[],sizePhi);
         
         
+
         
-        
-        
-        
-        if SymmetryError(rieszGradient, TriInfo, 1) >= 1e-8
-            error('Symmetriation procedure failed');
-        end
-        rieszGradient = SymmetryCompute(rieszGradient, TriInfo, 1);
-        
-        
-        
-        
+        rieszGradient = SymmetryCompute(rieszGradient, TriInfo, 1, 0, 1e-8);
         
         
         
@@ -78,7 +68,7 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformatio
         [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen,options);
         % Compute the optimality (the same as in the loop with t=cOptimality)
         phiCheckNew                   = phi - cOptimality*rieszGradient;
-        [phiCheck,~,~,iterationGibbs] = ProjectionGibbs(phiCheckNew,phiProj,matrices,lambda,TriInfo);
+        [phiCheck,~,~,iterationGibbs] = ProjectionGibbs(phiCheckNew,phiProj,matrices,lambda,TriInfo,options);
         phiDiff                       = phi - phiCheck;
         res                           = sqrt(ComputePhiNormSquare(phiDiff, TriInfo, matrices));
         
@@ -229,10 +219,11 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformatio
 end
 
 function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen,options)
+
     phiProj = phi;
     while true
         phiNew                              = phi-t*rieszGradient;
-        [phiProj,lambda]                    = ProjectionGibbs(phiNew,phiProj,matrices,lambda,TriInfo);
+        [phiProj,lambda]                    = ProjectionGibbs(phiNew,phiProj,matrices,lambda,TriInfo,options);
         dataEigen(-1)                       = t;
         options.computeG = 0;
         [JProj,~,~,~,~,~,~,~,~,~,dataEigen] = ComputeData(phiProj,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
@@ -251,15 +242,8 @@ function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradi
     
     
     
-%     if t < tMin
-if t<1
-%        save('qwe');
-       
-try
-        Test3_Gradient
-end    
-%        wefpokwpefokwe
-    end
+    Test2_GradientFun(phi,TriInfo,Transformation,matrices,constants,material,options)
+    
     
     
     if SymmetryError(phiProj, TriInfo, 1) >= 1e-8

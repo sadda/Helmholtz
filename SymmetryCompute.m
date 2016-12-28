@@ -1,4 +1,4 @@
-function fSym = SymmetryCompute(f, TriInfo, isPhi)
+function [fSym, symError] = SymmetryCompute(f, TriInfo, isPhi, writeError, stopError)
     
     fOrig = f;
     if isPhi && size(f,1) > TriInfo.npoint
@@ -21,16 +21,16 @@ function fSym = SymmetryCompute(f, TriInfo, isPhi)
     end
     
     fSym = f;
-    for i=1:size(f,2)
-        ind1    = find(TriInfo.x < 0);
-        ind2    = find(TriInfo.x > 0);
-        f1      = f(TriInfo.x < 0, i);
-        f2      = f(TriInfo.x > 0, i);
-        
-        [g1,h1] = sort(f1);
-        [q2,h2] = sort(f2);        
-        fSym(ind1(h1),i) = 0.5*(g1+q2);
-        fSym(ind2(h2),i) = 0.5*(g1+q2);
+    for i=1:size(f,1)
+        if TriInfo.x(i) < 0
+            ind = find(TriInfo.x == -TriInfo.x(i) & TriInfo.y == TriInfo.y(i));
+            if length(ind) == 1
+                fSym(i,:)   = 0.5*(f(i,:)+f(ind,:));
+                fSym(ind,:) = 0.5*(f(i,:)+f(ind,:));
+            else
+                error('Something wrong with the mesh');
+            end
+        end
     end
     
     if isPhi && size(fReshaped,1) == TriInfo.npointRed
@@ -41,6 +41,14 @@ function fSym = SymmetryCompute(f, TriInfo, isPhi)
     end
     if size(fOrig,1) > TriInfo.npoint
         fSym = fSym(:);
+    end
+    
+    symError = norm(fSym - fOrig);
+    if nargin >= 4 && writeError
+        fprintf('\nThe symmetrization error was %1.3e.\n', symError) ;
+    end
+    if nargin >= 5 && ~isempty(stopError) && symError > stopError
+        error('The symmetrization error was too big: %1.3e.\n', symError);
     end
 end
 

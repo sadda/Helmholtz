@@ -1,26 +1,36 @@
-iterMax = 1;
-relErr  = zeros(2, 3, iterMax);
-sizePhi = TriInfo.sizePhi;
-% Test random direction
-for i=1:iterMax
-    phi           = rand(sum(TriInfo.phiRowsFree),sizePhi);
-    phi           = phi ./ repmat(sum(phi,2), 1, sizePhi);
-    deltaPhi      = rand(size(phi));
-    [err, DJ]     = Test2_GradientPart(phi, deltaPhi, TriInfo, Transformation, matrices, constants, material);
-    relErr(1,:,i) = err(2:end)./DJ(2:end);
+    options = [];
+    options.computeU = 1;
+    options.symmetrize = 1;
+    options.separateObjective = 0;
+
+
+options.computeG = 1;
+[~,gradient]  = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options);
+rieszGradient = ComputeRieszGradient(gradient, TriInfo, matrices);
+deltaPhi      = -reshape(rieszGradient,[],TriInfo.sizePhi);
+
+%% Test gradient
+options.computeG = 1;
+[J,G,J1,J2,J3,G1,G2,G3] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options);
+options.computeG = 0;
+err  = zeros(8,4);
+JAll = [J J1 J2 J3];
+GAll = [G G1 G2 G3];
+DJ   = zeros(1,4);
+for j=1:4
+    DJ(j) = GAll(:,j)'*deltaPhi(:);
 end
-squeeze(relErr(1,:,:))
-% Test direction of gradient
-for i=1:iterMax
-    phi           = rand(size(phi));
-    phi           = phi ./ repmat(sum(phi,2), 1, sizePhi);
-    [~,gradient]  = ComputeData(phi,TriInfo,Transformation,matrices,constants,material);
-    rieszGradient = ComputeRieszGradient(gradient, TriInfo, matrices);
-    deltaPhi      = -reshape(rieszGradient,[],sizePhi);
-    [err, DJ]     = Test2_GradientPart(phi, deltaPhi, TriInfo, Transformation, matrices, constants, material);
-    relErr(2,:,i) = err(2:end)./DJ(2:end);
+for k=3:10
+    tau                = 10^(-k);
+    phiNew             = phi+tau*deltaPhi;
+    [JS,~,JS1,JS2,JS3] = ComputeData(phiNew,TriInfo,Transformation,matrices,constants,material,options);
+    JDiff              = [JS JS1 JS2 JS3] - JAll;
+    err(k-2,:)         = abs(JDiff/tau - DJ);
 end
-squeeze(relErr(1,:,:))
-squeeze(relErr(2,:,:))
+err = min(err);
+
+err(2:end) ./ DJ(2:end)
+
+
 
 

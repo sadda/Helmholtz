@@ -1,26 +1,33 @@
-% clear all;
-% close all;
+clear all;
+close all;
 
 addpath('./OldCodes');
 addpath(genpath('./P1AFEM'));
 
-
-refineMesh   = 1;
-drawResults  = 1;
-% iterMax      = 1000;
-iterMax      = 10;
+wavelength   = 1.5;
+% wavelength   = 2*pi;
+refineMesh   = 5;
+drawResults  = 0;
+iterMax      = 50;
 iterMaxIn    = 50;
 refineCount  = 2;
 coarsenCount = 3;
 method       = -1;
 
-regThetaL1   = 1e-1;
+regThetaL1   = 1e-2;
 regPhiL1     = 1e-5;
 regPhiL2     = 1e-5;
+% regPhiL1 = 0;
+% regPhiL2 = 0;
 cutThreshold = 0.2;
 
-alphaAll = linspace(1e-4, 8e-4, 1);
 
+standardStart = 1;
+
+
+
+% alphaAll = 8e-5;
+alphaAll = 1e-5;
 
 for alphaIndex = 1:length(alphaAll)
     
@@ -43,106 +50,164 @@ for alphaIndex = 1:length(alphaAll)
     
     for meshIndex = 1:refineMesh
         % Construct mesh and determine the starting point
-        if meshIndex == 1
-            % load('MeshesCreated/Mesh_GeFree/Data.mat');
-            % load('MeshesCreated/Mesh_GeFree_AirFree/Data.mat');
-            % load('MeshesCreated/Mesh_AllFree/Data.mat');
-            data           = load('MeshesCreated/MeshRef_0.mat');
-            TriInfo        = data.TriInfo;
-            Transformation = data.Transformation;
-            matrices       = data.matrices;
-            meshMaxElement = [min(diff(unique(TriInfo.x))); min(diff(unique(TriInfo.y)))];
-            
-            epsilon        = 2*max(meshMaxElement);
-            phi            = 1/TriInfo.sizePhi*ones(TriInfo.npointRed, TriInfo.sizePhi);
-            npoint0        = TriInfo.npoint;
-            fixGe          = TriInfo.x >= -1 & TriInfo.x <= 1 & TriInfo.y >= 1.25 & TriInfo.y <= 1.5;
-            dataEigen      = [];
-        else
-            TriInfoOld   = TriInfo;
-            phiProlonged = ProlongPhi(phi, TriInfoOld);
-            
-            mesh         = struct('coordinates', [TriInfoOld.x TriInfoOld.y], 'elements', TriInfoOld.e2p);
-            coordinates  = mesh.coordinates;
-            elements     = mesh.elements;
-            dirichlet    = getBoundary(mesh);
-            neumann      = [];
-            
-            % Collect data which need to be prolonged to the new mesh
-            dataToProlong = [phiProlonged fixGe];
-            if ~isempty(dataEigen)
-                dataEigenKeys = keys(dataEigen);
-                dataEigenKeys = [dataEigenKeys{:}];
-                dataEigenKeys = dataEigenKeys(dataEigenKeys >= 0);
-                for dataEigenKey = dataEigenKeys
-                    data          = dataEigen(dataEigenKey);
-                    id1D          = ~TriInfo.idp(1:TriInfo.npoint)==1;
-                    yEigen        = zeros(TriInfo.npoint, 1);
-                    yEigen(id1D)  = data{1};
-                    dataToProlong = [dataToProlong yEigen data{3}];
+        if standardStart
+            if meshIndex == 1
+                data = load('MeshesCreated/Mesh_GeFree/Data.mat');
+                % load('MeshesCreated/Mesh_GeFree_AirFree/Data.mat');
+                % load('MeshesCreated/Mesh_AllFree/Data.mat');
+                % data           = load('MeshesCreated/MeshRef_0.mat');
+                TriInfo        = data.TriInfo;
+                Transformation = data.Transformation;
+                matrices       = data.matrices;
+                meshMaxElement = [min(diff(unique(TriInfo.x))); min(diff(unique(TriInfo.y)))];
+                
+                epsilon        = 2*max(meshMaxElement);
+                phi            = 1/TriInfo.sizePhi*ones(TriInfo.npointRed, TriInfo.sizePhi);
+                npoint0        = TriInfo.npoint;
+                fixGe          = TriInfo.x >= -1 & TriInfo.x <= 1 & TriInfo.y >= 1.25 & TriInfo.y <= 1.5;
+                dataEigen      = [];
+            else
+                TriInfoOld   = TriInfo;
+                phiProlonged = ProlongPhi(phi, TriInfoOld);
+                
+                mesh         = struct('coordinates', [TriInfoOld.x TriInfoOld.y], 'elements', TriInfoOld.e2p);
+                coordinates  = mesh.coordinates;
+                elements     = mesh.elements;
+                dirichlet    = getBoundary(mesh);
+                neumann      = [];
+                
+                % Collect data which need to be prolonged to the new mesh
+                dataToProlong = [phiProlonged fixGe];
+                if ~isempty(dataEigen)
+                    dataEigenKeys = keys(dataEigen);
+                    dataEigenKeys = [dataEigenKeys{:}];
+                    dataEigenKeys = dataEigenKeys(dataEigenKeys >= 0);
+                    for dataEigenKey = dataEigenKeys
+                        data          = dataEigen(dataEigenKey);
+                        id1D          = ~TriInfo.idp(1:TriInfo.npoint)==1;
+                        yEigen        = zeros(TriInfo.npoint, 1);
+                        yEigen(id1D)  = data{1};
+                        dataToProlong = [dataToProlong yEigen data{3}];
+                    end
                 end
-            end
-            
-            % Perform refinement
-            phi           = ProlongPhi(phi, TriInfo);
-            refinementTol = 1e-6;
-            for i=1:refineCount
-                markedTriangles = zeros(size(elements,1), 1);
-                for k = 1:size(elements,1)
-                    values = phi(elements(k,:),:);
-                    % TODO rozmysli si, jestli nechces pridat automat kdyz jsme ve fixGe
-                    if any(values(:) < 1 - refinementTol & values(:) > refinementTol) || norm(values(1,:) - values(2,:)) > refinementTol || norm(values(1,:) - values(3,:)) > refinementTol
-                        if max(diff(sort(coordinates(elements(k,:),1)))) >= meshMaxElement(1)-refinementTol && max(diff(sort(coordinates(elements(k,:),2)))) >= meshMaxElement(2)-refinementTol % Element is not too small
+                
+                % Perform refinement
+                phi           = ProlongPhi(phi, TriInfo);
+                refinementTol = 1e-6;
+                for i=1:refineCount
+                    markedTriangles = zeros(size(elements,1), 1);
+                    for k = 1:size(elements,1)
+                        values = phi(elements(k,:),:);
+                        % TODO rozmysli si, jestli nechces pridat automat kdyz jsme ve fixGe
+                        if any(values(:) < 1 - refinementTol & values(:) > refinementTol) || norm(values(1,:) - values(2,:)) > refinementTol || norm(values(1,:) - values(3,:)) > refinementTol
+                            if max(diff(sort(coordinates(elements(k,:),1)))) >= meshMaxElement(1)-refinementTol && max(diff(sort(coordinates(elements(k,:),2)))) >= meshMaxElement(2)-refinementTol % Element is not too small
+                                markedTriangles(k) = 1;
+                            end
+                        end
+                    end
+                    [coordinates, elements, dataToProlong, dirichlet, neumann] = refineNVBModified(coordinates, elements, dataToProlong, dirichlet, neumann, logical(markedTriangles));
+                    phi   = dataToProlong(:,1:TriInfo.sizePhi);
+                end
+                
+                % Perform coarsening
+                coordinatesNumber = size(coordinates,1);
+                for i=1:coarsenCount
+                    markedTriangles = zeros(size(elements,1), 1);
+                    for k = 1:size(elements,1)
+                        values = phi(elements(k,:),:);
+                        if all(values(:) >= 1 - refinementTol | values(:) <= refinementTol) && norm(values(1,:) - values(2,:)) <= refinementTol && norm(values(1,:) - values(3,:)) <= refinementTol
                             markedTriangles(k) = 1;
                         end
                     end
+                    if any(markedTriangles)
+                        [coordinates, elements, dataToProlong, dirichlet, neumann] = coarsenNVBModified(npoint0, coordinates, elements, dataToProlong, dirichlet, neumann, logical(markedTriangles));
+                        phi   = dataToProlong(:,1:TriInfo.sizePhi);
+                    end
                 end
-                [coordinates, elements, dataToProlong, dirichlet, neumann] = refineNVBModified(coordinates, elements, dataToProlong, dirichlet, neumann, logical(markedTriangles));
+                fprintf('The adaptive coarsening removed %d out of %d nodes.\n\n', coordinatesNumber-size(coordinates,1), coordinatesNumber);
+                
+                % Recompute data
+                [TriInfo, Transformation]           = MeshCreateMatrices1(coordinates(:,1),coordinates(:,2),elements,TriInfoOld.requiredX,TriInfoOld.requiredY,TriInfoOld.sizePhi);
+                [Transformation, TriInfo, matrices] = MeshCreateMatrices2(Transformation, TriInfo);
+                matrices.H1scalProlong              = TriInfo.phiProlongationMatrix6'*matrices.H1scal*TriInfo.phiProlongationMatrix6;
+                
                 phi   = dataToProlong(:,1:TriInfo.sizePhi);
+                phi(~TriInfo.phiRowsFree,:) = [];
+                fixGe = dataToProlong(:,TriInfo.sizePhi+1);
+                fixGe = fixGe >= 1-1e-5; % Do not forget that you need binary values for fixGe (it is lost after prolongation)
+                if ~isempty(dataEigen)
+                    counter = TriInfo.sizePhi+2;
+                    for dataEigenKey = dataEigenKeys
+                        data                    = dataEigen(dataEigenKey);
+                        id1D                    = ~TriInfo.idp(1:TriInfo.npoint)==1;
+                        yEigen                  = dataToProlong(:,counter);
+                        dataEigen(dataEigenKey) = {yEigen(id1D), data{2}, dataToProlong(:, counter+1:counter+TriInfo.sizePhi)};
+                        counter                 = counter+1+TriInfo.sizePhi;
+                    end
+                end
+                
+                epsilon = epsilon / 2;
+                meshMaxElement = meshMaxElement / 2;
             end
+        else
+            load('Results_Alternating3_Cutoff=0.2_First/Results_Ref4_23_Elas/DataAll.mat', 'TriInfo', 'phi');
             
-            % Perform coarsening
-            coordinatesNumber = size(coordinates,1);
-            for i=1:coarsenCount
+            TriInfoOrig     = TriInfo;
+            phiOrig         = ProlongPhi(phi, TriInfo);
+            coordinatesOrig = [TriInfo.x TriInfo.y];
+            
+            minX1 = min(coordinatesOrig(phiOrig(:,1) > 1e-5, 1));
+            minX2 = min(coordinatesOrig(phiOrig(:,2) > 1e-5, 1));
+            maxY1 = max(coordinatesOrig(phiOrig(:,1) > 1e-5, 2));
+            maxY2 = max(coordinatesOrig(phiOrig(:,2) > 1e-5, 2));
+            
+            load('MeshesCreated/Mesh_GeFree/Data.mat', 'TriInfo');
+            
+            mesh          = struct('coordinates', [TriInfo.x TriInfo.y], 'elements', TriInfo.e2p);
+            coordinates   = mesh.coordinates;
+            elements      = mesh.elements;
+            dirichlet     = getBoundary(mesh);
+            neumann       = [];
+            overfill1     = 0.02;
+            overfill2     = 0.25;
+            
+            % Perform refinement
+            refinementTol = 1e-6;
+            for i=1:(refineMesh-1)
                 markedTriangles = zeros(size(elements,1), 1);
                 for k = 1:size(elements,1)
-                    values = phi(elements(k,:),:);
-                    if all(values(:) >= 1 - refinementTol | values(:) <= refinementTol) && norm(values(1,:) - values(2,:)) <= refinementTol && norm(values(1,:) - values(3,:)) <= refinementTol
+                    coorX = coordinates(elements(k,:),1);
+                    coorY = coordinates(elements(k,:),2);
+                    if (all(coorX>=min(minX1,minX2)-overfill1) && all(coorX<=-min(minX1,minX2)+overfill1) && all(coorY>=1) && all(coorY<=max(maxY1,maxY2)+overfill1)) || (all(coorY>=1-overfill2) && all(coorY<=1+overfill2))
                         markedTriangles(k) = 1;
                     end
                 end
-                if any(markedTriangles)
-                    [coordinates, elements, dataToProlong, dirichlet, neumann] = coarsenNVBModified(npoint0, coordinates, elements, dataToProlong, dirichlet, neumann, logical(markedTriangles));
-                    phi   = dataToProlong(:,1:TriInfo.sizePhi);
-                end
+                [coordinates, elements, ~, dirichlet, neumann] = refineNVBModified(coordinates, elements, [], dirichlet, neumann, logical(markedTriangles));
+                overfill2 = overfill2 / 2;
             end
-            fprintf('The adaptive coarsening removed %d out of %d nodes.\n\n', coordinatesNumber-size(coordinates,1), coordinatesNumber);
             
             % Recompute data
-            [TriInfo, Transformation]           = MeshCreateMatrices1(coordinates(:,1),coordinates(:,2),elements,TriInfoOld.requiredX,TriInfoOld.requiredY,TriInfoOld.sizePhi);
+            [TriInfo, Transformation]           = MeshCreateMatrices1(coordinates(:,1),coordinates(:,2),elements,TriInfo.requiredX,TriInfo.requiredY,TriInfo.sizePhi);
             [Transformation, TriInfo, matrices] = MeshCreateMatrices2(Transformation, TriInfo);
             matrices.H1scalProlong              = TriInfo.phiProlongationMatrix6'*matrices.H1scal*TriInfo.phiProlongationMatrix6;
             
-            phi   = dataToProlong(:,1:TriInfo.sizePhi);
-            phi(~TriInfo.phiRowsFree,:) = [];
-            fixGe = dataToProlong(:,TriInfo.sizePhi+1);
-            fixGe = fixGe >= 1-1e-5; % Do not forget that you need binary values for fixGe (it is lost after prolongation)
-            if ~isempty(dataEigen)
-                counter = TriInfo.sizePhi+2;
-                for dataEigenKey = dataEigenKeys
-                    data                    = dataEigen(dataEigenKey);
-                    id1D                    = ~TriInfo.idp(1:TriInfo.npoint)==1;
-                    yEigen                  = dataToProlong(:,counter);
-                    dataEigen(dataEigenKey) = {yEigen(id1D), data{2}, dataToProlong(:, counter+1:counter+TriInfo.sizePhi)};
-                    counter                 = counter+1+TriInfo.sizePhi;
-                end
+            phi = zeros(TriInfo.npoint, TriInfo.sizePhi);
+            for i=1:TriInfo.sizePhi
+                phiInterp = scatteredInterpolant(TriInfoOrig.x, TriInfoOrig.y, phiOrig(:,i));
+                phi(:,i)  = phiInterp(TriInfo.x, TriInfo.y);
             end
+            phi = SymmetryCompute(phi, TriInfo, 1);
+            phi = phi ./ repmat(sum(phi,2), 1, TriInfo.sizePhi);
             
-            epsilon = epsilon / 2;
-            meshMaxElement = meshMaxElement / 2;
+            meshMaxElement = [min(diff(unique(TriInfo.x))); min(diff(unique(TriInfo.y)))];
+            epsilon        = 2*max(meshMaxElement);
+            npoint0        = TriInfo.npoint;
+            fixGe          = phi(:,1) >= 0.5;
+            dataEigen      = [];
+            phi            = phi(sum(TriInfo.phiProlongationVector,2) == 0,:);
         end
         
-        [constants, material] = ObtainData(epsilon, alpha, 1.64);
+        [constants, material] = ObtainData(epsilon, alpha, wavelength);
         
         if method ~= -1
             constants.regThetaL1 = regThetaL1;
@@ -164,8 +229,7 @@ for alphaIndex = 1:length(alphaAll)
                 [phi, tInit1, data]      = ProjectedGradients_Old(TriInfo, Transformation, matrices, material, constants, dirName1, iterMax, drawResults, phi, tInit1);
                 data.totalArea           = TriInfo.totalArea;
                 
-                SymmetryError(phi, TriInfo, 1)
-                phi = SymmetryCompute(phi, TriInfo, 1);
+                phi = SymmetryCompute(phi, TriInfo, 1, 1, 1e-8);
                 
                 [TriInfo, matrices, phi] = ModifyMatrices(false(TriInfo.npoint, 1), TriInfo, matrices, Transformation, phi);
                 

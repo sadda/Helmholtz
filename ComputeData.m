@@ -11,6 +11,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     options  = SetField(options, 'computeU', 0);
     options  = SetField(options, 'symmetrize', 1);
     options  = SetField(options, 'separateObjective', 1);
+    options  = SetField(options, 'cutoffs', 1);
     
     e2p      = TriInfo.e2p;
     nelement = TriInfo.nelement;
@@ -49,7 +50,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         % C(phi)e(u):e(v) -> u
         for i=1:TriInfo.sizePhi
             phiAux = phi(:,i);
-            phiAux = ComputePhiCutoff(phiAux);
+            phiAux = ComputePhiCutoff(phiAux, options);
             sumPhi = sum(phiAux(e2p),2);
             AEla12_11_1 = AEla12_11_1 + (2/3*mu(i)+1/3*lambda(i))*sumPhi;
             AEla12_11_2 = AEla12_11_2 + 1/3*mu(i)*sumPhi;
@@ -80,10 +81,9 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             clocy = Transformation{k,8};
             
             phiMatrix0ele = [phi(e2p(k,1),:)',phi(e2p(k,2),:)',phi(e2p(k,3),:)'];
-            
             sigmaXphi     = sigma0*phiMatrix0ele(2,:);
-            bEla( k,1,:) = sigmaXphi*clocx ;
-            bEla( k,2,:) = sigmaXphi*clocy ;
+            bEla(k,1,:)   = sigmaXphi*clocx ;
+            bEla(k,2,:)   = sigmaXphi*clocy ;
         end
         
         AEla       = sparse(TriInfo.indicesIEla(:), TriInfo.indicesJEla(:), AEla12(:));
@@ -99,7 +99,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     
     %% Compute Theta and eigen
     
-    phiSum = ComputePhiCutoffEigen(phi);
+    phiSum = ComputePhiCutoffEigen(phi, options);
     phiSum = sum(phiSum.*repmat(epsilonR,npoint,1),2);
     % phi*Theta*v -> Theta
     T = zeros(nelement,1,1,9);
@@ -119,20 +119,20 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         T(k,1,1,:) = 1/120*edet*addition(:);
     end
     
-    ii1D = TriInfo.indicesIPhi(:,1,1,:);
-    jj2D = TriInfo.indicesJPhi(:,1,1,:);
-    T    = sparse(ii1D(:), jj2D(:), T(:));
-    T    = T(id1D,id1D);
-    S    = matrices.GradSq(id1D,id1D);
-    M1   = matrices.Mloc(1:npoint,1:npoint);
-    M    = matrices.Mloc(id1D,id1D);
+    ii1D  = TriInfo.indicesIPhi(:,1,1,:);
+    jj2D  = TriInfo.indicesJPhi(:,1,1,:);
+    TFull = sparse(ii1D(:), jj2D(:), T(:));
+    T     = TFull(id1D,id1D);
+    S     = matrices.GradSq(id1D,id1D);
+    M1    = matrices.Mloc(1:npoint,1:npoint);
+    M     = matrices.Mloc(id1D,id1D);
     
+    constM = 1+1e-3;
     if isKey(dataEigen, dataEigen(-1))
         data        = dataEigen(dataEigen(-1));
         yEigen      = data{1};
         lambdaEigen = data{2};
         phiEigen    = data{3};
-        constM      = 1+1e-3;
         constL      = max(epsilonR);
         constCP     = 2*pi^2/((max(TriInfo.x)-min(TriInfo.x))*(max(TriInfo.y)-min(TriInfo.y)));
         constEigen  = constL*(constCP^2+1)*(2*constM*constCP^2+1)/(constCP^2);
@@ -144,7 +144,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         shift2      = Inf;
     end
     
-    shift1  = max(epsilonR);
+    shift1  = constM*sum(epsilonR);
     shift   = min(shift1, shift2);
     maxIter = 50000;
     
@@ -154,6 +154,9 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         R = chol(S-T+max(shift1,shift2)*M);
         warning('Shift was not successful. Switching for higher shift for this iteration.');
     end
+    
+    % TODO change the norm for the residual
+    
     for i=1:maxIter
         x      = yEigen / norm(yEigen);
         Mx     = M*x;
@@ -164,7 +167,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             break
         end
     end
-
+    
     Theta       = zeros(npoint,1);
     Theta(id1D) = x;
     eigen       = eigen - shift;
@@ -172,12 +175,8 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     if mean(Theta) < 0
         Theta = -Theta;
     end
+    
     if i == maxIter
-        
-        
-        PlotFunction(Theta, TriInfo);
-        
-        
         if norm(res) <= 1e-6
             if norm(res) >= 1e-10
                 warning('Maximum number of iterations for eigenvalue computation exceeded. The tolerance is still pretty low. This may happen at the beginning of projected gradients.');
@@ -187,25 +186,32 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         end
     end
     
+    
     if options.symmetrize
-        if SymmetryError(Theta, TriInfo, 0) >= 1e-8 || SymmetryError(Theta, TriInfo, 0) >= 1e-8
-            error('The symmetrization procedure failed');
-        end
-        yEigen = SymmetryCompute(yEigen, TriInfo, 0);
-        Theta  = SymmetryCompute(Theta, TriInfo, 0);
+        yEigen = SymmetryCompute(yEigen, TriInfo, 0, 0, 1e-6);
+        Theta  = SymmetryCompute(Theta, TriInfo, 0, 0, 1e-6);
     end
     dataEigen(dataEigen(-1)) = {yEigen, eigen, phi};
     
+    
+    %     normalization = 2;
+    %
+    %
+    %     ThetaNorm = Theta'.^(normalization/2)*M1*Theta.^(normalization/2);
+    %     ThetaNorm = ThetaNorm^(1/normalization);
+    %     Theta     = Theta / ThetaNorm;
+    
+    
+    
+    
     %% Compute objective
-
+    
     if options.separateObjective
-        J1  = 0.5*(Theta-TriInfo.phiGe)'*M1*(Theta-TriInfo.phiGe);
-        J21 = ones(npoint,1)'*M1*Theta;
-        J22 = ones(npoint,1)'*M1*phi(:,1);
-        J2  = J21 + J22;
+        J1  = 0.5*(Theta-TriInfo.phiGe)'*M1*(Theta-TriInfo.phiGe) + constants.regThetaL1*ones(npoint,1)'*M1*Theta;
+        J2  = ones(npoint,1)'*M1*phi(:,1);
         J3  = 0.5*phi(:,1)'*M1*phi(:,1);
         
-        J   = J1 + constants.regThetaL1*J21 + constants.regPhiL1*J22 + constants.regPhiL2*J3;
+        J   = J1 + constants.regPhiL1*J2 + constants.regPhiL2*J3;
     else
         % tr(e(u))theta^2 -> theta, theta
         AObj = zeros(nelement,1,1,9);
@@ -257,25 +263,40 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         end
         T2  = sparse(TriInfo.ii3(:), TriInfo.jj3(:), T2(:));
         
+        
+        
+        if norm(TFull*Theta-T2'*phi(:)) >= 1e-13
+            error('Hey, something is wrong.');
+        end
+        
+        
+        
+        B11 = S-T-eigen*M;
+        B12 = -M*Theta(id1D);
+        B21 = B12';
+        B22 = 0;
+        B   = [B11 B12; B21 B22];
+        
         if options.separateObjective
             %% Compute q
             
-            B11 = S-T-eigen*M;
-            B12 = -M*Theta(id1D);
-            B21 = (-M*Theta(id1D))';
-            B22 = 0;
+            % J1  = 0.5*(Theta-TriInfo.phiGe)'*M1*(Theta-TriInfo.phiGe) + constants.regThetaL1*ones(npoint,1)'*M1*Theta;
             
-            B     = [B11 B12; B21 B22];
-            bAdjQ = -M1*(Theta-TriInfo.phiGe) + constants.regThetaL1*-M1*ones(npoint,1);
-            bAdjQ = [bAdjQ(id1D); 0]; % Add zero for the eigenvalue
+            bAdjQ1 = M1(id1D,id1D)*(Theta(id1D)-TriInfo.phiGe(id1D)) + M1(id1D,~id1D)*(Theta(~id1D)-TriInfo.phiGe(~id1D)) + constants.regThetaL1*M1(id1D,:)*ones(npoint,1);
+            bAdjQ2 = M1(~id1D,~id1D)*(Theta(~id1D)-TriInfo.phiGe(~id1D)) + M1(~id1D,id1D)*(Theta(id1D)-TriInfo.phiGe(id1D)) + constants.regThetaL1*M1(~id1D,:)*ones(npoint,1);
+            bAdjQ1 = -bAdjQ1;
+            bAdjQ2 = -bAdjQ2;
             
-            q       = zeros(npoint, 1);
-            qr      = B\bAdjQ;
-            q(id1D) = qr(1:end-1);
+            q1       = B\[bAdjQ1; 0];
+            q1       = q1(1:end-1);
+            q2       = bAdjQ2;
+            q        = zeros(npoint,1);
+            q(id1D)  = q1;
+            q(~id1D) = q2;
             
             %% Compute gradient
             
-            G1 = -T2*q;
+            G1 = -T2(:,id1D)*q(id1D);
             G2 = zeros(size(G1));
             G3 = zeros(size(G2));
             G2(1:npoint) = M1*ones(npoint,1);
@@ -304,22 +325,52 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             end
             bAdjP   = sparse(TriInfo.indicesIElav(:), TriInfo.indicesJElav(:), bAdjP(:));
             
+            
+            
+            
+            if norm(bAdjP'*u - Theta'*AObj*Theta) >= 1e-13
+                error('Oh no. Again');
+            end
+            
+            
+            
+            
             p       = zeros(2*npoint,1);
             p(id)   = AEla(id,id)\bAdjP(id);
             
             %% Compute q
             
-            B11 = S-T-eigen*M;
-            B12 = -M*Theta(id1D);
-            B21 = (-M*Theta(id1D))';
-            B22 = 0;
+            % J1   = -Theta'*AObj*Theta;
             
-            B     = [B11 B12; B21 B22];
-            bAdjQ = [2*AObj(id1D,:)*Theta; 0];
+            bAdjQ1 = -2*AObj(id1D,id1D)*Theta(id1D) - 2*AObj(id1D,~id1D)*Theta(~id1D);
+            bAdjQ2 = -2*AObj(~id1D,~id1D)*Theta(~id1D) - 2*AObj(~id1D,id1D)*Theta(id1D);
+            bAdjQ1 = -bAdjQ1;
+            bAdjQ2 = -bAdjQ2;
             
-            q       = zeros(npoint, 1);
-            qr      = B\bAdjQ;
-            q(id1D) = qr(1:end-1);
+            q1       = B\[bAdjQ1; 0];
+            q1       = q1(1:end-1);
+            q2       = bAdjQ2;
+            q        = zeros(npoint,1);
+            q(id1D)  = q1;
+            q(~id1D) = q2;
+            
+            
+            %             bAdjQMod1 = 1/ThetaNorm*speye(size(Theta,1));
+            %             bAdjQMod2 = normalization*Theta/ThetaNorm^(normalization+1)*(Theta'.^(normalization-1)*M1);
+            %
+            %             bAdjQ1 = bAdjQMod1(id1D,id1D)*(2*AObj(id1D,:)*Theta);
+            %             bAdjQ2 = bAdjQMod2(id1D,id1D)*(2*AObj(id1D,:)*Theta);
+            %             bAdjQ1 = [bAdjQ1; 0];
+            %             bAdjQ2 = [bAdjQ2; 0];
+            %
+            %             q1       = zeros(npoint, 1);
+            %             qr1      = B\bAdjQ1;
+            %             q1(id1D) = qr1(1:end-1);
+            %
+            %             q2       = zeros(npoint, 1);
+            %             qr2      = B\bAdjQ2;
+            %             q2(id1D) = qr2(1:end-1);
+            
             
             %% Compute gradient
             
@@ -367,7 +418,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             for m=1:sizePhi
                 pxBackup    = px;
                 pyBackup    = py;
-                cDerivative = ComputeCDerivative(phi(:,m), TriInfo);
+                cDerivative = ComputeCDerivative(phi(:,m), TriInfo, options);
                 px          = px.*cDerivative;
                 py          = py.*cDerivative;
                 
@@ -394,7 +445,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             EdPhi = sparse(TriInfo.indicesIiPhi(:),TriInfo.indicesJjPhi(:), EdPhi(:));
             EdPhi = EdPhi + A42*u(:);
             
-            G1 = EdPhi1*phi(:) + EdPhi - T2*q;
+            G1 = EdPhi1*phi(:) + EdPhi - T2(:,id1D)*q(id1D);
             G2 = matrices.GradSq*phi(:);
             G3 = 0.5*matrices.Id - matrices.Mloc*phi(:);
             
@@ -423,21 +474,25 @@ function options = SetField(options, fieldName, fieldValue)
     end
 end
 
-function phi = ComputePhiCutoff(phi)
+function phi = ComputePhiCutoff(phi, options)
     
-    delta = 1e-3;
-    a     = 1/pi*delta^4;
-    b     = pi*(1-2*delta^3)/delta^4;
-    
-    set1  = phi<0;
-    set2  = phi>=0 & phi<=delta;
-    phi(set1) = a*atan(b*phi(set1)) + delta^4;
-    phi(set2) = phi(set2) - 2*delta*(phi(set2)-delta).^3 - (phi(set2)-delta).^4;
+    if options.cutoffs
+        delta = 1e-3;
+        
+        a     = 1/pi*delta^4;
+        b     = pi*(1-2*delta^3)/delta^4;
+        
+        set1  = phi<0;
+        set2  = phi>=0 & phi<=delta;
+        phi(set1) = a*atan(b*phi(set1)) + delta^4;
+        phi(set2) = phi(set2) - 2*delta*(phi(set2)-delta).^3 - (phi(set2)-delta).^4;
+    end
 end
 
-function cDerivative = ComputeCDerivative(phi, TriInfo)
+function cDerivative = ComputeCDerivative(phi, TriInfo, options)
     
     delta = 1e-3;
+    
     a     = 1/pi*delta^4;
     b     = pi*(1-2*delta^3)/delta^4;
     
@@ -454,14 +509,20 @@ function cDerivative = ComputeCDerivative(phi, TriInfo)
     cDerivative       = reshape(cDerivative, [], 3);
     cDerivative       = mean(cDerivative, 2);
     cDerivative       = repmat(cDerivative, 1, 3);
+    
+    if ~options.cutoffs
+        cDerivative = ones(size(cDerivative));
+    end
 end
 
-function phi = ComputePhiCutoffEigen(phi)
+function phi = ComputePhiCutoffEigen(phi, options)
     
-    delta = 1e-3;
-    
-    set1  = phi<0;
-    set2  = phi>1;
-    phi(set1) = delta*atan(phi(set1)/delta);
-    phi(set2) = 1 + delta*atan((phi(set2)-1)/delta);
+    if options.cutoffs
+        delta = 1e-3;
+        
+        set1  = phi<0;
+        set2  = phi>1;
+        phi(set1) = delta*atan(phi(set1)/delta);
+        phi(set2) = 1 + delta*atan((phi(set2)-1)/delta);
+    end
 end
