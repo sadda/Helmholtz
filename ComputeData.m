@@ -11,6 +11,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     options  = SetField(options, 'computeU', 0);
     options  = SetField(options, 'symmetrize', 1);
     options  = SetField(options, 'separateObjective', 1);
+    options  = SetField(options, 'jointObjectiveQuadratic', 1);
     options  = SetField(options, 'cutoffs', 1);
     
     e2p      = TriInfo.e2p;
@@ -171,7 +172,14 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     Theta       = zeros(npoint,1);
     Theta(id1D) = x;
     eigen       = eigen - shift;
+    
+    
+    
     Theta       = Theta / sqrt(Theta'*matrices.Mloc(1:npoint,1:npoint)*Theta);
+    %     Theta       = Theta / (ones(npoint,1)'*matrices.Mloc(1:npoint,1:npoint)*Theta);
+    
+    
+    
     if mean(Theta) < 0
         Theta = -Theta;
     end
@@ -233,7 +241,11 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         jj2D = TriInfo.indicesJPhi(:,1,1,:);
         AObj = sparse(ii1D(:), jj2D(:), AObj(:));
         
-        J1   = -Theta'*AObj*Theta;
+        if options.jointObjectiveQuadratic
+            J1   = -Theta'*AObj*Theta;
+        else
+            J1   = -ones(npoint,1)'*AObj*Theta;
+        end
         J2   = 0.5*(matrices.GradSq*phi(:))'*phi(:);
         J3   = 0.5*(matrices.Id'*phi(:) - (matrices.Mloc*phi(:))'*phi(:));
         
@@ -263,24 +275,15 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         end
         T2  = sparse(TriInfo.ii3(:), TriInfo.jj3(:), T2(:));
         
-        
-        
-        if norm(TFull*Theta-T2'*phi(:)) >= 1e-13
-            error('Hey, something is wrong.');
-        end
-        
-        
-        
         B11 = S-T-eigen*M;
         B12 = -M*Theta(id1D);
         B21 = B12';
+        %             B21 = -ones(1,npoint)*M1(:,id1D);
         B22 = 0;
         B   = [B11 B12; B21 B22];
         
         if options.separateObjective
             %% Compute q
-            
-            % J1  = 0.5*(Theta-TriInfo.phiGe)'*M1*(Theta-TriInfo.phiGe) + constants.regThetaL1*ones(npoint,1)'*M1*Theta;
             
             bAdjQ1 = M1(id1D,id1D)*(Theta(id1D)-TriInfo.phiGe(id1D)) + M1(id1D,~id1D)*(Theta(~id1D)-TriInfo.phiGe(~id1D)) + constants.regThetaL1*M1(id1D,:)*ones(npoint,1);
             bAdjQ2 = M1(~id1D,~id1D)*(Theta(~id1D)-TriInfo.phiGe(~id1D)) + M1(~id1D,id1D)*(Theta(id1D)-TriInfo.phiGe(id1D)) + constants.regThetaL1*M1(~id1D,:)*ones(npoint,1);
@@ -320,30 +323,28 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
                 
                 ThetaAux = Theta(e2p(k,:));
                 
-                bAdjP(k,1,:) = 2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
-                bAdjP(k,2,:) = 2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
+                if options.jointObjectiveQuadratic
+                    bAdjP(k,1,:) = 2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
+                    bAdjP(k,2,:) = 2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
+                else
+                    bAdjP(k,1,:) = 2*slocx'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
+                    bAdjP(k,2,:) = 2*slocy'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
+                end
             end
             bAdjP   = sparse(TriInfo.indicesIElav(:), TriInfo.indicesJElav(:), bAdjP(:));
-            
-            
-            
-            
-            if norm(bAdjP'*u - Theta'*AObj*Theta) >= 1e-13
-                error('Oh no. Again');
-            end
-            
-            
-            
             
             p       = zeros(2*npoint,1);
             p(id)   = AEla(id,id)\bAdjP(id);
             
             %% Compute q
             
-            % J1   = -Theta'*AObj*Theta;
-            
-            bAdjQ1 = -2*AObj(id1D,id1D)*Theta(id1D) - 2*AObj(id1D,~id1D)*Theta(~id1D);
-            bAdjQ2 = -2*AObj(~id1D,~id1D)*Theta(~id1D) - 2*AObj(~id1D,id1D)*Theta(id1D);
+            if options.jointObjectiveQuadratic
+                bAdjQ1 = -2*AObj(id1D,id1D)*Theta(id1D) - 2*AObj(id1D,~id1D)*Theta(~id1D);
+                bAdjQ2 = -2*AObj(~id1D,~id1D)*Theta(~id1D) - 2*AObj(~id1D,id1D)*Theta(id1D);
+            else
+                bAdjQ1 = -AObj(id1D,id1D)*ones(sum(id1D),1) - AObj(id1D,~id1D)*ones(sum(~id1D),1);
+                bAdjQ2 = -AObj(~id1D,~id1D)*ones(sum(~id1D),1) - AObj(~id1D,id1D)*ones(sum(id1D),1);
+            end
             bAdjQ1 = -bAdjQ1;
             bAdjQ2 = -bAdjQ2;
             
