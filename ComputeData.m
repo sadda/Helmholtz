@@ -11,7 +11,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     options  = SetField(options, 'computeU', 0);
     options  = SetField(options, 'symmetrize', 1);
     options  = SetField(options, 'separateObjective', 1);
-    options  = SetField(options, 'jointObjectiveQuadratic', 1);
+    options  = SetField(options, 'jointObjectiveLp', 2);
     options  = SetField(options, 'normalizationLp', 2);
     options  = SetField(options, 'cutoffs', 1);
     
@@ -180,9 +180,9 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         case 2
             ThetaNorm = sqrt(Theta'*M1*Theta);
         otherwise
-            normCon   = options.normalizationLp;
-            ThetaNorm = Theta'.^(normCon/2)*M1*Theta.^(normCon/2);
-            ThetaNorm = ThetaNorm^(1/normCon);
+            normCon1  = options.normalizationLp;
+            ThetaNorm = Theta'.^(normCon1/2)*M1*Theta.^(normCon1/2);
+            ThetaNorm = ThetaNorm^(1/normCon1);
     end
     Theta = Theta / ThetaNorm;
     
@@ -235,10 +235,14 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         jj2D = TriInfo.indicesJPhi(:,1,1,:);
         AObj = sparse(ii1D(:), jj2D(:), AObj(:));
         
-        if options.jointObjectiveQuadratic
-            J1   = -Theta'*AObj*Theta;
-        else
-            J1   = -ones(npoint,1)'*AObj*Theta;
+        switch options.jointObjectiveLp
+            case 1
+                J1       = -ones(npoint,1)'*AObj*Theta;
+            case 2
+                J1       = -Theta'*AObj*Theta;
+            otherwise
+                normCon2 = options.jointObjectiveLp;
+                J1       = -Theta'.^(normCon2/2)*AObj*Theta.^(normCon2/2);
         end
         J2   = 0.5*(matrices.GradSq*phi(:))'*phi(:);
         J3   = 0.5*(matrices.Id'*phi(:) - (matrices.Mloc*phi(:))'*phi(:));
@@ -284,7 +288,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
                 B31 = B13';
                 B32 = B23';
             otherwise
-                BP  = Theta.^(normCon/2)'*M1*sparse(1:npoint,1:npoint,Theta.^(normCon/2-1));
+                BP  = Theta.^(normCon1/2)'*M1*sparse(1:npoint,1:npoint,Theta.^(normCon1/2-1));
                 B31 = BP(:,id1D);
                 B32 = BP(:,~id1D);
         end
@@ -327,14 +331,19 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
                 slocy  = Transformation{k,10};
                 mloc   = Transformation{k,11};
                 
-                ThetaAux = Theta(e2p(k,:));
-                
-                if options.jointObjectiveQuadratic
-                    bAdjP(k,1,:) = 2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
-                    bAdjP(k,2,:) = 2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
-                else
-                    bAdjP(k,1,:) = 2*slocx'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
-                    bAdjP(k,2,:) = 2*slocy'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
+                switch options.jointObjectiveLp
+                    case 1
+                        ThetaAux     = Theta(e2p(k,:));
+                        bAdjP(k,1,:) = 2*slocx'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
+                        bAdjP(k,2,:) = 2*slocy'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
+                    case 2
+                        ThetaAux     = Theta(e2p(k,:));
+                        bAdjP(k,1,:) = 2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
+                        bAdjP(k,2,:) = 2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
+                    otherwise
+                        ThetaAux     = Theta(e2p(k,:)).^(normCon2/2);
+                        bAdjP(k,1,:) = 2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
+                        bAdjP(k,2,:) = 2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
                 end
             end
             bAdjP   = sparse(TriInfo.indicesIElav(:), TriInfo.indicesJElav(:), bAdjP(:));
@@ -344,16 +353,20 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             
             %% Compute q
             
-            if options.jointObjectiveQuadratic
-                bAdjQ1 = -2*AObj(id1D,id1D)*Theta(id1D) - 2*AObj(id1D,~id1D)*Theta(~id1D);
-                bAdjQ2 = -2*AObj(~id1D,~id1D)*Theta(~id1D) - 2*AObj(~id1D,id1D)*Theta(id1D);
-            else
-                bAdjQ1 = -AObj(id1D,id1D)*ones(sum(id1D),1) - AObj(id1D,~id1D)*ones(sum(~id1D),1);
-                bAdjQ2 = -AObj(~id1D,~id1D)*ones(sum(~id1D),1) - AObj(~id1D,id1D)*ones(sum(id1D),1);
+            switch options.jointObjectiveLp
+                case 1
+                    bAdjQ1 = -AObj(id1D,:)*ones(npoint,1);
+                    bAdjQ2 = -AObj(~id1D,:)*ones(npoint,1);
+                case 2
+                    bAdjQ1 = -2*AObj(id1D,:)*Theta;
+                    bAdjQ2 = -2*AObj(~id1D,:)*Theta;
+                otherwise
+                    bAdjQP = -normCon2*sparse(1:npoint,1:npoint,Theta.^(normCon2/2-1))*AObj*Theta.^(normCon2/2);
+                    bAdjQ1 = bAdjQP(id1D);
+                    bAdjQ2 = bAdjQP(~id1D);
             end
             bAdjQ1 = -bAdjQ1;
             bAdjQ2 = -bAdjQ2;
-            
             
             qAux     = B'\[bAdjQ1; bAdjQ2; 0];
             qAux     = qAux(1:end-1);
