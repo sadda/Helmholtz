@@ -4,17 +4,18 @@ close all;
 addpath('./OldCodes');
 addpath(genpath('./P1AFEM'));
 
-wavelength   = 1.5;
-% wavelength   = 2*pi;
+% wavelength   = 1.5;
+wavelength   = 2*pi;
 refineMesh   = 5;
 drawResults  = 0;
 iterMax      = 50;
 iterMaxIn    = 50;
 refineCount  = 2;
 coarsenCount = 3;
-method       = -1;
+method       = 1;
 
-regThetaL1   = 1e-2;
+regThetaL1   = 1e-3;
+% regThetaL1   = 0;
 regPhiL1     = 1e-5;
 regPhiL2     = 1e-5;
 % regPhiL1 = 0;

@@ -13,29 +13,18 @@ function Test2_GradientFun(phi,TriInfo,Transformation,matrices,constants,materia
     for j=1:4
         DJ(j) = GAll(:,j)'*deltaPhi(:);
     end
-%     format long
+    
     for k=1:10
         tau                = 10^(-k);
         phiNew             = phi+tau*deltaPhi;
         options.computeG   = 0;
         [JS,~,JS1,JS2,JS3] = ComputeData(phiNew,TriInfo,Transformation,matrices,constants,material,options);
-                
-%         [norm(G(:)) norm(phiNew(:)) JS JS1 JS2 JS3]
-        
         JDiff              = [JS JS1 JS2 JS3] - JAll;
         err(k,:)         = abs(JDiff/tau - DJ);
     end
     err = min(err);
     
     err ./ DJ
-    
-%     
-%     figure;
-%     plot(G2);
-%     
-%     PlotFunction(phi, TriInfo);
-%     
-%     weohwoefiwe
 end
 
 

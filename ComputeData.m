@@ -12,6 +12,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     options  = SetField(options, 'symmetrize', 1);
     options  = SetField(options, 'separateObjective', 1);
     options  = SetField(options, 'jointObjectiveQuadratic', 1);
+    options  = SetField(options, 'normalizationQuadratic', 1);
     options  = SetField(options, 'cutoffs', 1);
     
     e2p      = TriInfo.e2p;
@@ -173,12 +174,11 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     Theta(id1D) = x;
     eigen       = eigen - shift;
     
-    
-    
-    Theta       = Theta / sqrt(Theta'*matrices.Mloc(1:npoint,1:npoint)*Theta);
-    %     Theta       = Theta / (ones(npoint,1)'*matrices.Mloc(1:npoint,1:npoint)*Theta);
-    
-    
+    if options.normalizationQuadratic
+        Theta       = Theta / sqrt(Theta'*M1*Theta);
+    else
+        Theta       = Theta / (ones(npoint,1)'*M1*Theta);
+    end
     
     if mean(Theta) < 0
         Theta = -Theta;
@@ -192,8 +192,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         else
             error('Maximum number of iterations for eigenvalue computation exceeded');
         end
-    end
-    
+    end    
     
     if options.symmetrize
         yEigen = SymmetryCompute(yEigen, TriInfo, 0, 0, 1e-6);
@@ -208,8 +207,6 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     %     ThetaNorm = Theta'.^(normalization/2)*M1*Theta.^(normalization/2);
     %     ThetaNorm = ThetaNorm^(1/normalization);
     %     Theta     = Theta / ThetaNorm;
-    
-    
     
     
     %% Compute objective
@@ -275,27 +272,33 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         end
         T2  = sparse(TriInfo.ii3(:), TriInfo.jj3(:), T2(:));
         
+        
         B11 = S-T-eigen*M;
-        B12 = -M*Theta(id1D);
+        B12 = sparse(sum(id1D),sum(~id1D));
+        B13 = -M*Theta(id1D);
         B21 = B12';
-        %             B21 = -ones(1,npoint)*M1(:,id1D);
-        B22 = 0;
-        B   = [B11 B12; B21 B22];
+        B22 = speye(sum(~id1D));
+        B23 = sparse(sum(~id1D),1);
+        if options.normalizationQuadratic
+            B31 = B13';
+            B32 = B23';
+        else
+            B31 = ones(1,npoint)*M1(:,id1D);
+            B32 = ones(1,npoint)*M1(:,~id1D);
+        end
+        B33 = 0;
+        B   = [B11 B12 B13; B21 B22 B23; B31 B32 B33];
         
         if options.separateObjective
             %% Compute q
             
-            bAdjQ1 = M1(id1D,id1D)*(Theta(id1D)-TriInfo.phiGe(id1D)) + M1(id1D,~id1D)*(Theta(~id1D)-TriInfo.phiGe(~id1D)) + constants.regThetaL1*M1(id1D,:)*ones(npoint,1);
-            bAdjQ2 = M1(~id1D,~id1D)*(Theta(~id1D)-TriInfo.phiGe(~id1D)) + M1(~id1D,id1D)*(Theta(id1D)-TriInfo.phiGe(id1D)) + constants.regThetaL1*M1(~id1D,:)*ones(npoint,1);
-            bAdjQ1 = -bAdjQ1;
-            bAdjQ2 = -bAdjQ2;
-            
-            q1       = B\[bAdjQ1; 0];
-            q1       = q1(1:end-1);
-            q2       = bAdjQ2;
+            bAdjQ1   = -M1(id1D,:)*(Theta-TriInfo.phiGe) - constants.regThetaL1*M1(id1D,:)*ones(npoint,1);
+            bAdjQ2   = -M1(~id1D,:)*(Theta-TriInfo.phiGe) - constants.regThetaL1*M1(~id1D,:)*ones(npoint,1);
+            qAux     = B'\[bAdjQ1; bAdjQ2; 0];
+            qAux     = qAux(1:end-1);
             q        = zeros(npoint,1);
-            q(id1D)  = q1;
-            q(~id1D) = q2;
+            q(id1D)  = qAux(1:sum(id1D));
+            q(~id1D) = qAux(sum(id1D)+1:end);
             
             %% Compute gradient
             
@@ -348,30 +351,12 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             bAdjQ1 = -bAdjQ1;
             bAdjQ2 = -bAdjQ2;
             
-            q1       = B\[bAdjQ1; 0];
-            q1       = q1(1:end-1);
-            q2       = bAdjQ2;
+            
+            qAux     = B'\[bAdjQ1; bAdjQ2; 0];
+            qAux     = qAux(1:end-1);
             q        = zeros(npoint,1);
-            q(id1D)  = q1;
-            q(~id1D) = q2;
-            
-            
-            %             bAdjQMod1 = 1/ThetaNorm*speye(size(Theta,1));
-            %             bAdjQMod2 = normalization*Theta/ThetaNorm^(normalization+1)*(Theta'.^(normalization-1)*M1);
-            %
-            %             bAdjQ1 = bAdjQMod1(id1D,id1D)*(2*AObj(id1D,:)*Theta);
-            %             bAdjQ2 = bAdjQMod2(id1D,id1D)*(2*AObj(id1D,:)*Theta);
-            %             bAdjQ1 = [bAdjQ1; 0];
-            %             bAdjQ2 = [bAdjQ2; 0];
-            %
-            %             q1       = zeros(npoint, 1);
-            %             qr1      = B\bAdjQ1;
-            %             q1(id1D) = qr1(1:end-1);
-            %
-            %             q2       = zeros(npoint, 1);
-            %             qr2      = B\bAdjQ2;
-            %             q2(id1D) = qr2(1:end-1);
-            
+            q(id1D)  = qAux(1:sum(id1D));
+            q(~id1D) = qAux(sum(id1D)+1:end);
             
             %% Compute gradient
             
