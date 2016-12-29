@@ -12,7 +12,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     options  = SetField(options, 'symmetrize', 1);
     options  = SetField(options, 'separateObjective', 1);
     options  = SetField(options, 'jointObjectiveQuadratic', 1);
-    options  = SetField(options, 'normalizationQuadratic', 1);
+    options  = SetField(options, 'normalizationLp', 2);
     options  = SetField(options, 'cutoffs', 1);
     
     e2p      = TriInfo.e2p;
@@ -174,11 +174,17 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     Theta(id1D) = x;
     eigen       = eigen - shift;
     
-    if options.normalizationQuadratic
-        Theta       = Theta / sqrt(Theta'*M1*Theta);
-    else
-        Theta       = Theta / (ones(npoint,1)'*M1*Theta);
+    switch options.normalizationLp
+        case 1
+            ThetaNorm = ones(npoint,1)'*M1*Theta;
+        case 2
+            ThetaNorm = sqrt(Theta'*M1*Theta);
+        otherwise
+            normCon   = options.normalizationLp;
+            ThetaNorm = Theta'.^(normCon/2)*M1*Theta.^(normCon/2);
+            ThetaNorm = ThetaNorm^(1/normCon);
     end
+    Theta = Theta / ThetaNorm;
     
     if mean(Theta) < 0
         Theta = -Theta;
@@ -192,22 +198,13 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         else
             error('Maximum number of iterations for eigenvalue computation exceeded');
         end
-    end    
+    end
     
     if options.symmetrize
         yEigen = SymmetryCompute(yEigen, TriInfo, 0, 0, 1e-6);
         Theta  = SymmetryCompute(Theta, TriInfo, 0, 0, 1e-6);
     end
     dataEigen(dataEigen(-1)) = {yEigen, eigen, phi};
-    
-    
-    %     normalization = 2;
-    %
-    %
-    %     ThetaNorm = Theta'.^(normalization/2)*M1*Theta.^(normalization/2);
-    %     ThetaNorm = ThetaNorm^(1/normalization);
-    %     Theta     = Theta / ThetaNorm;
-    
     
     %% Compute objective
     
@@ -279,12 +276,17 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         B21 = B12';
         B22 = speye(sum(~id1D));
         B23 = sparse(sum(~id1D),1);
-        if options.normalizationQuadratic
-            B31 = B13';
-            B32 = B23';
-        else
-            B31 = ones(1,npoint)*M1(:,id1D);
-            B32 = ones(1,npoint)*M1(:,~id1D);
+        switch options.normalizationLp
+            case 1
+                B31 = ones(1,npoint)*M1(:,id1D);
+                B32 = ones(1,npoint)*M1(:,~id1D);
+            case 2
+                B31 = B13';
+                B32 = B23';
+            otherwise
+                BP  = Theta.^(normCon/2)'*M1*sparse(1:npoint,1:npoint,Theta.^(normCon/2-1));
+                B31 = BP(:,id1D);
+                B32 = BP(:,~id1D);
         end
         B33 = 0;
         B   = [B11 B12 B13; B21 B22 B23; B31 B32 B33];
@@ -294,6 +296,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             
             bAdjQ1   = -M1(id1D,:)*(Theta-TriInfo.phiGe) - constants.regThetaL1*M1(id1D,:)*ones(npoint,1);
             bAdjQ2   = -M1(~id1D,:)*(Theta-TriInfo.phiGe) - constants.regThetaL1*M1(~id1D,:)*ones(npoint,1);
+            
             qAux     = B'\[bAdjQ1; bAdjQ2; 0];
             qAux     = qAux(1:end-1);
             q        = zeros(npoint,1);
