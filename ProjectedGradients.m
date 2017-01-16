@@ -1,11 +1,11 @@
-function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, tInitial)
+function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, tInitial, options)
     
-    
-    options = [];
-    options.computeU = 1;
-    options.symmetrize = 0;
-    options.separateObjective = 0;
-    
+    if nargin < 11
+        options = [];
+        options.computeU = 1;
+        options.symmetrize = 0;
+        options.separateObjective = 0;
+    end
     if nargin < 10
         t = 0.5;
     else
@@ -16,6 +16,8 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
         rmdir(dirName, 's');
     end
     mkdir(dirName);
+    u     = []; % Needed for parfor
+    Theta = [];
     
     %% Set parameters
     sigma   = 1e-4;   % for Armijo line search
@@ -157,7 +159,7 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
             clf;
             trisurf(e2p, x, y, phiProlonged*(1:sizePhi)');
             view(2);
-            shading interp
+            shading interp;
             saveas(gcf, filename, 'jpg');
             
             for i=1:sizePhi
@@ -227,7 +229,7 @@ function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradi
     end
     
     
-    Test2_GradientFun(phi,TriInfo,Transformation,matrices,constants,material,options)
+    % Test2_GradientFun(phi,TriInfo,Transformation,matrices,constants,material,options)
     
     
     

@@ -242,7 +242,7 @@ function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradi
     
     
     
-    Test2_GradientFun(phi,TriInfo,Transformation,matrices,constants,material,options)
+    % Test2_GradientFun(phi,TriInfo,Transformation,matrices,constants,material,options)
     
     
     

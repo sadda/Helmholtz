@@ -4,44 +4,48 @@ close all;
 addpath('./OldCodes');
 addpath(genpath('./P1AFEM'));
 
-% wavelength   = 1.5;
-wavelength   = 2*pi;
-refineMesh   = 5;
-drawResults  = 0;
-iterMax      = 50;
-iterMaxIn    = 50;
-refineCount  = 2;
-coarsenCount = 3;
-method       = 1;
-
-regThetaL1   = 1e-3;
-% regThetaL1   = 0;
-regPhiL1     = 1e-5;
-regPhiL2     = 1e-5;
-% regPhiL1 = 0;
-% regPhiL2 = 0;
-cutThreshold = 0.2;
-
-
+wavelength    = 1.64;
+% wavelength    = 2*pi;
+refineMesh    = 1;
+drawResults   = 0;
+iterMax       = 100;
+iterMaxIn     = 20;
+refineCount   = 2;
+coarsenCount  = 3;
+method        = 1;
 standardStart = 1;
 
+if method == 1
+    pars            = [];
+    pars.alpha      = repmat(linspace(1e-5, 1e-3, 6), 1, 6);
+    % pars.regThetaL1 = kron(linspace(1e-4, 1e-2, 6), ones(1, 6));
+    pars.regThetaL1 = kron(10.^(-4:1), ones(1, 6));
+    pars.regPhiL1   = zeros(size(pars.alpha));
+    pars.regPhiL2   = 1e-5*ones(size(pars.alpha));
+elseif method == 0
+    pars              = [];
+    pars.alpha        = 1e-4;
+    pars.cutThreshold = 0.2;
+elseif method == -1
+    pars                  = [];
+    pars.jointObjectiveLp = repmat([1 2 8 2 8], 1, 3);
+    pars.normalizationLp  = repmat([1 2 8 8 2], 1, 3);
+    pars.alpha            = kron(linspace(1e-5, 1e-4, 3), ones(1, 5));
+end
 
-
-% alphaAll = 8e-5;
-alphaAll = 1e-5;
-
-for alphaIndex = 1:length(alphaAll)
+parfor parsIndex = 1:length(pars.alpha)
+% for parsIndex = 1:length(pars.alpha)
     
-    alpha = alphaAll(alphaIndex);
-    tInit1       = 1e3;
-    tInit2       = 1e3;
+    alpha  = pars.alpha(parsIndex);
+    tInit1 = 1e3;
+    tInit2 = 1e3;
     
     if method == 1
-        dirNameBase = sprintf('Results_Alternating3_RegThetaL1=%1.3f', regThetaL1);
+        dirNameBase = sprintf('Results_Alt_ThetaL1=%1.6f_PhiL1=%1.6f_PhiL2=%1.6f_Alpha=%1.6f', pars.regThetaL1(parsIndex), pars.regPhiL1(parsIndex), pars.regPhiL2(parsIndex), pars.alpha(parsIndex));
     elseif method == 0
-        dirNameBase = sprintf('Results_Alternating3_Cutoff=%1.1f', cutThreshold);
+        dirNameBase = sprintf('Results_Alt_Cut=%1.3f_Alpha=%1.6f', pars.cutThreshold(parsIndex), pars.alpha(parsIndex));
     elseif method == -1
-        dirNameBase = sprintf('Results_Together_Alpha=%1.5f', alpha);
+        dirNameBase = sprintf('Results_Tog_Obj=%d_Norm=%d_Alpha=%1.6f', pars.jointObjectiveLp(parsIndex), pars.normalizationLp(parsIndex), pars.alpha(parsIndex));
     end
     picName     = fullfile(dirNameBase, 'Pictures');
     if exist(picName, 'dir')
@@ -53,10 +57,10 @@ for alphaIndex = 1:length(alphaAll)
         % Construct mesh and determine the starting point
         if standardStart
             if meshIndex == 1
-                data = load('MeshesCreated/Mesh_GeFree/Data.mat');
+                % data = load('MeshesCreated/Mesh_GeFree/Data.mat');
                 % load('MeshesCreated/Mesh_GeFree_AirFree/Data.mat');
                 % load('MeshesCreated/Mesh_AllFree/Data.mat');
-                % data           = load('MeshesCreated/MeshRef_0.mat');
+                data           = load('MeshesCreated/MeshRef_2.mat');
                 TriInfo        = data.TriInfo;
                 Transformation = data.Transformation;
                 matrices       = data.matrices;
@@ -211,9 +215,9 @@ for alphaIndex = 1:length(alphaAll)
         [constants, material] = ObtainData(epsilon, alpha, wavelength);
         
         if method ~= -1
-            constants.regThetaL1 = regThetaL1;
-            constants.regPhiL1   = regPhiL1;
-            constants.regPhiL2   = regPhiL2;
+            constants.regThetaL1 = pars.regThetaL1(parsIndex);
+            constants.regPhiL1   = pars.regPhiL1(parsIndex);
+            constants.regPhiL2   = pars.regPhiL2(parsIndex);
             fixGePrev            = fixGe;
             
             for iterIn=1:iterMaxIn
@@ -244,18 +248,17 @@ for alphaIndex = 1:length(alphaAll)
                     phi2 = SymmetryCompute(phi2, TriInfo, 1);
                     
                     phi2Prolonged                    = ProlongPhi(phi2, TriInfo);
-                    fixGe                            = phi2Prolonged(:,1) > 0.3;
+                    fixGe                            = phi2Prolonged(:,1) > 0.9;
                 else
                     TriInfo.phiGe = 0;
                     
                     options = struct('computeG', 0, 'computeU', 1, 'symmetrize', 0, 'separateObjective', 0);
                     [~,~,~,~,~,~,~,~,~,Theta] = ComputeData(phi, TriInfo, Transformation, matrices, constants, material, options, []);
-                    fixGe = Theta >= cutThreshold*max(Theta(:));
+                    fixGe = Theta >= pars.cutThreshold(parsIndex)*max(Theta(:));
                 end
                 
                 sum(fixGe)
                 sum(abs(fixGe - fixGePrev))
-                
                 
                 data.iterIn    = iterIn;
                 data.meshIndex = meshIndex;
@@ -277,9 +280,15 @@ for alphaIndex = 1:length(alphaAll)
             dirName = sprintf('Results_Ref%d_%d_Elas', meshIndex-1, iterIn);
             dirName = fullfile(dirNameBase, dirName);
             
-            [phi, tInit1] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, iterMax, drawResults, phi, tInit1);
+            options = [];
+            options = SetField(options, 'computeU', 1);
+            options = SetField(options, 'computeG', 0);
+            options = SetField(options, 'symmetrize', 0);
+            options = SetField(options, 'separateObjective', 0);
+            options = SetField(options, 'jointObjectiveLp', pars.jointObjectiveLp(parsIndex));
+            options = SetField(options, 'normalizationLp', pars.normalizationLp(parsIndex));
             
-            options = struct('computeG', 0, 'computeU', 1, 'symmetrize', 0, 'separateObjective', 0);
+            [phi, tInit1]             = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, iterMax, drawResults, phi, tInit1, options);
             [~,~,~,~,~,~,~,~,~,Theta] = ComputeData(phi, TriInfo, Transformation, matrices, constants, material, options, []);
             
             figure;
@@ -301,7 +310,7 @@ end
 
 
 
-% exit;
+exit;
 
 
 

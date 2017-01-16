@@ -1,8 +1,5 @@
 function DrawResults(phi, Theta, TriInfo, picName, data)
     
-    
-    
-    
     phiProlonged = ProlongPhi(phi, TriInfo);
     
     minX      = min(TriInfo.x);
@@ -10,9 +7,7 @@ function DrawResults(phi, Theta, TriInfo, picName, data)
     minY      = min(TriInfo.y);
     maxY      = max(TriInfo.y);
     
-    
-    
-    
+    %% Draw phi
     
     fig = figure('visible', 'off');
     hold on;
@@ -21,13 +16,19 @@ function DrawResults(phi, Theta, TriInfo, picName, data)
     title(sprintf('Area = %1.5f, strain = %1.5f, ratio = %1.5f', data.totalArea, data.J1, data.J1 / data.totalArea));
     view(2);
     shading interp;
-    %colormap(colormap(gray));
-    colormap jet;
+    colormap(colormap(gray));
+    % colormap jet;
+    caxis([1 4]);
+    c = colorbar;
+    c.Ticks = [1 2 3 4];
+    c.TickLabels = {'Ge', 'SiN', 'SiO_2', 'air'};
     set(gca,'xcolor',get(gcf,'color'));
     set(gca,'xtick',[]);
     set(gca,'ycolor',get(gcf,'color'));
     set(gca,'ytick',[]);
     saveas(fig, fullfile(picName, sprintf('Phi_Ref%d_%d.jpg', data.meshIndex-1, data.iterIn)));
+    
+    %% Draw Theta
     
     fig = figure('visible', 'off');
     trisurf(TriInfo.e2p, TriInfo.x, TriInfo.y, Theta);
@@ -93,8 +94,4 @@ function DrawResults(phi, Theta, TriInfo, picName, data)
     end
     
     saveas(fig, fullfile(picName, sprintf('Theta_Ref%d_%d.jpg', data.meshIndex-1, data.iterIn)));
-    
-    
-    
-    
 end
