@@ -11,9 +11,11 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     options  = SetField(options, 'computeU', 0);
     options  = SetField(options, 'symmetrize', 1);
     options  = SetField(options, 'separateObjective', 1);
-    options  = SetField(options, 'jointObjectiveLp', 2);
+    options  = SetField(options, 'jointObjectiveThetaLp', 2);
+    options  = SetField(options, 'jointObjectivePhiLp', 0);    
     options  = SetField(options, 'normalizationLp', 2);
     options  = SetField(options, 'cutoffs', 1);
+    options  = SetField(options, 'alphaGe', 0);
     
     e2p      = TriInfo.e2p;
     nelement = TriInfo.nelement;
@@ -66,7 +68,11 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         AEla12(:,1,2,:) = repmat(AEla12_12_1,1,1,1,9).*slocyx_aa + repmat(AEla12_12_2,1,1,1,9).*slocxy_aa;
         AEla12(:,2,1,:) = repmat(AEla12_12_1,1,1,1,9).*slocxy_aa + repmat(AEla12_12_2,1,1,1,9).*slocyx_aa;
         % phi_i*phi1_1*tr(e(v)) -> phi, phi1
-        phiAux = phi(:,1);
+        if options.originalEps0
+            phiAux = phi(:,1);
+        else
+            phiAux = phi(:,3);
+        end
         phiAux = phiAux(e2p);
         for i = 1:sizePhi
             aux1x   = 1/6*eps0*(mu(i)+lambda(i))*slocx3a_aa.*reshape(phiAux(:,[1 1 1 2 2 2 3 3 3]), [], 1, 1, 9);
@@ -93,8 +99,17 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         bEla       = sparse(TriInfo.indicesIElav(:), TriInfo.indicesJElav(:), bEla(:));
         bEla       = AEla11_2_1*phi(:) - bEla;
         
-        u          = zeros(2*npoint,1);
-        u(id)      = AEla(id,id) \ bEla(id);
+        if options.originalEps0
+            u       = zeros(2*npoint,1);
+            u(id)   = AEla(id,id)\bEla(id);
+        else
+            uFixed  = material.eps0*[TriInfo.x; TriInfo.y];
+            bEla    = bEla - AEla(:,~id)*uFixed(~id);
+            
+            u       = zeros(2*npoint,1);
+            u(id)   = AEla(id,id)\bEla(id);
+            u(~id)  = uFixed(~id);
+        end
     else
         u          = [];
     end
@@ -174,13 +189,16 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
     Theta(id1D) = x;
     eigen       = eigen - shift;
     
+    normCon1    = options.normalizationLp;
+    normCon2    = options.jointObjectiveThetaLp;
+    normCon3    = options.jointObjectivePhiLp;
+    
     switch options.normalizationLp
         case 1
             ThetaNorm = ones(npoint,1)'*M1*Theta;
         case 2
             ThetaNorm = sqrt(Theta'*M1*Theta);
-        otherwise
-            normCon1  = options.normalizationLp;
+        otherwise            
             ThetaNorm = Theta'.^(normCon1/2)*M1*Theta.^(normCon1/2);
             ThetaNorm = ThetaNorm^(1/normCon1);
     end
@@ -235,19 +253,31 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
         jj2D = TriInfo.indicesJPhi(:,1,1,:);
         AObj = sparse(ii1D(:), jj2D(:), AObj(:));
         
-        switch options.jointObjectiveLp
-            case 1
-                J1       = -ones(npoint,1)'*AObj*Theta;
-            case 2
-                J1       = -Theta'*AObj*Theta;
-            otherwise
-                normCon2 = options.jointObjectiveLp;
-                J1       = -Theta'.^(normCon2/2)*AObj*Theta.^(normCon2/2);
+        if normCon3 > 0
+            J1       = -Theta'.^normCon2*AObj*phi(:,1).^normCon3;
+        else
+            switch normCon2
+                case 1
+                    J1       = -ones(npoint,1)'*AObj*Theta;
+                case 2
+                    J1       = -Theta'*AObj*Theta;
+                otherwise
+                    J1       = -Theta'.^(normCon2/2)*AObj*Theta.^(normCon2/2);
+            end
         end
         J2   = 0.5*(matrices.GradSq*phi(:))'*phi(:);
         J3   = 0.5*(matrices.Id'*phi(:) - (matrices.Mloc*phi(:))'*phi(:));
         
         J    = J1 + constants.alpha*constants.epsilon*J2 + constants.alpha/constants.epsilon*J3;
+        
+        if options.alphaGe > 0
+            J = J + options.alphaGe * 0.5*(matrices.Id(1:npoint)'*phi(:,1) - phi(:,1)'*M1*phi(:,1));
+        end
+    end
+    if isfield(options, 'geLevel2') && ~isempty(options.geLevel2) && options.geLevel2 > 0
+        J1Add = options.gammaPen*0.5*(ones(1,npoint)*M1*phi(:,1) - options.geLevel2)^2;
+        J1    = J1 + J1Add;
+        J     = J + J1Add;
     end
     
     if nargout > 1 && options.computeG
@@ -331,19 +361,27 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
                 slocy  = Transformation{k,10};
                 mloc   = Transformation{k,11};
                 
-                switch options.jointObjectiveLp
-                    case 1
-                        ThetaAux     = Theta(e2p(k,:));
-                        bAdjP(k,1,:) = 2*slocx'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
-                        bAdjP(k,2,:) = 2*slocy'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
-                    case 2
-                        ThetaAux     = Theta(e2p(k,:));
-                        bAdjP(k,1,:) = 2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
-                        bAdjP(k,2,:) = 2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
-                    otherwise
-                        ThetaAux     = Theta(e2p(k,:)).^(normCon2/2);
-                        bAdjP(k,1,:) = 2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
-                        bAdjP(k,2,:) = 2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
+                if normCon3 > 0
+                    phiAux       = phi(:,1);
+                    phiAux       = phiAux(e2p(k,:));
+                    ThetaAux     = Theta(e2p(k,:));
+                    bAdjP(k,1,:) = 2*slocx'/edet*((phiAux.^normCon3)'*mloc*ThetaAux.^normCon2);
+                    bAdjP(k,2,:) = 2*slocy'/edet*((phiAux.^normCon3)'*mloc*ThetaAux.^normCon2);
+                else
+                    switch normCon2
+                        case 1
+                            ThetaAux     = Theta(e2p(k,:));
+                            bAdjP(k,1,:) = 2*slocx'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
+                            bAdjP(k,2,:) = 2*slocy'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
+                        case 2
+                            ThetaAux     = Theta(e2p(k,:));
+                            bAdjP(k,1,:) = 2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
+                            bAdjP(k,2,:) = 2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
+                        otherwise
+                            ThetaAux     = Theta(e2p(k,:)).^(normCon2/2);
+                            bAdjP(k,1,:) = 2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
+                            bAdjP(k,2,:) = 2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
+                    end
                 end
             end
             bAdjP   = sparse(TriInfo.indicesIElav(:), TriInfo.indicesJElav(:), bAdjP(:));
@@ -353,17 +391,23 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             
             %% Compute q
             
-            switch options.jointObjectiveLp
-                case 1
-                    bAdjQ1 = -AObj(id1D,:)*ones(npoint,1);
-                    bAdjQ2 = -AObj(~id1D,:)*ones(npoint,1);
-                case 2
-                    bAdjQ1 = -2*AObj(id1D,:)*Theta;
-                    bAdjQ2 = -2*AObj(~id1D,:)*Theta;
-                otherwise
-                    bAdjQP = -normCon2*sparse(1:npoint,1:npoint,Theta.^(normCon2/2-1))*AObj*Theta.^(normCon2/2);
-                    bAdjQ1 = bAdjQP(id1D);
-                    bAdjQ2 = bAdjQP(~id1D);
+            if normCon3 > 0
+                bAdjQ  = -normCon2*(Theta.^(normCon2-1)).*(AObj*phi(:,1).^normCon3);
+                bAdjQ1 = bAdjQ(id1D);
+                bAdjQ2 = bAdjQ(~id1D);
+            else
+                switch normCon2
+                    case 1
+                        bAdjQ1 = -AObj(id1D,:)*ones(npoint,1);
+                        bAdjQ2 = -AObj(~id1D,:)*ones(npoint,1);
+                    case 2
+                        bAdjQ1 = -2*AObj(id1D,:)*Theta;
+                        bAdjQ2 = -2*AObj(~id1D,:)*Theta;
+                    otherwise
+                        bAdjQP = -normCon2*sparse(1:npoint,1:npoint,Theta.^(normCon2/2-1))*AObj*Theta.^(normCon2/2);
+                        bAdjQ1 = bAdjQP(id1D);
+                        bAdjQ2 = bAdjQP(~id1D);
+                end
             end
             bAdjQ1 = -bAdjQ1;
             bAdjQ2 = -bAdjQ2;
@@ -408,12 +452,22 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             px     = px(TriInfo.e2p);
             py     = py(TriInfo.e2p);
             % (phi_1*w_i+phi_i*w_1)*tr(e(p)) -> phi
-            aux1 = 8*(lambda(1)+mu(1))*eps0 * sum(reshape(px,[],1,1,3).*slocx_aa+reshape(py,[],1,1,3).*slocy_aa,4) ./ edet_aa;
-            A41_4(:,1,1,:) = repmat(aux1,1,1,1,9).*mloc_aa;
-            for m=2:sizePhi
-                aux2 = 4*(lambda(m)+mu(m))*eps0 * sum(reshape(px,[],1,1,3).*slocx_aa+reshape(py,[],1,1,3).*slocy_aa,4) ./ edet_aa;
-                A41_4(:,1,m,:) = repmat(aux2,1,1,1,9).*mloc_aa;
-                A41_4(:,m,1,:) = repmat(aux2,1,1,1,9).*mloc_aa;
+            if options.originalEps0
+                aux1 = 8*(lambda(1)+mu(1))*eps0 * sum(reshape(px,[],1,1,3).*slocx_aa+reshape(py,[],1,1,3).*slocy_aa,4) ./ edet_aa;
+                A41_4(:,1,1,:) = repmat(aux1,1,1,1,9).*mloc_aa;
+                for m=[2 3 4]
+                    aux2 = 4*(lambda(m)+mu(m))*eps0 * sum(reshape(px,[],1,1,3).*slocx_aa+reshape(py,[],1,1,3).*slocy_aa,4) ./ edet_aa;
+                    A41_4(:,1,m,:) = repmat(aux2,1,1,1,9).*mloc_aa;
+                    A41_4(:,m,1,:) = repmat(aux2,1,1,1,9).*mloc_aa;
+                end
+            else
+                aux1 = 8*(lambda(3)+mu(3))*eps0 * sum(reshape(px,[],1,1,3).*slocx_aa+reshape(py,[],1,1,3).*slocy_aa,4) ./ edet_aa;
+                A41_4(:,3,3,:) = repmat(aux1,1,1,1,9).*mloc_aa;
+                for m=[1 2 4]
+                    aux2 = 4*(lambda(m)+mu(m))*eps0 * sum(reshape(px,[],1,1,3).*slocx_aa+reshape(py,[],1,1,3).*slocy_aa,4) ./ edet_aa;
+                    A41_4(:,3,m,:) = repmat(aux2,1,1,1,9).*mloc_aa;
+                    A41_4(:,m,3,:) = repmat(aux2,1,1,1,9).*mloc_aa;
+                end
             end
             EdPhi1    = sparse(TriInfo.indicesIPhi(:), TriInfo.indicesJPhi(:), -A41_4(:));
             % C(w)e(u):e(p) -> u
@@ -449,13 +503,29 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi,T
             
             G1 = EdPhi1*phi(:) + EdPhi - T2(:,id1D)*q(id1D);
             G2 = matrices.GradSq*phi(:);
-            G3 = 0.5*matrices.Id - matrices.Mloc*phi(:);
+            G3 = 0.5*matrices.Id - matrices.Mloc*phi(:);            
+            if normCon3 > 0
+                G1(1:npoint) = G1(1:npoint) - normCon3*(phi(:,1).^(normCon3-1)).*(AObj*Theta.^normCon2);
+            end
             
             G1 = ShortenPhi(G1, TriInfo);
             G2 = ShortenPhi(G2, TriInfo);
             G3 = ShortenPhi(G3, TriInfo);
             
             G  = G1 + constants.alpha*constants.epsilon*G2 + constants.alpha/constants.epsilon*G3;
+            
+            if options.alphaGe > 0
+                GAux = options.alphaGe*(0.5*matrices.Id(1:npoint) - M1*phi(:,1));
+                GAux = TriInfo.phiProlongationMatrix'*GAux;
+                G(1:TriInfo.npointRed) = G(1:TriInfo.npointRed) + GAux;
+            end
+        end
+        if isfield(options, 'geLevel2') && ~isempty(options.geLevel2) && options.geLevel2 > 0
+            G1Add           = zeros(sizePhi*npoint,1);
+            G1Add(1:npoint) = options.gammaPen*(ones(1,npoint)*M1*phi(:,1) - options.geLevel2)*M1*ones(npoint,1);
+            G1Add           = ShortenPhi(G1Add, TriInfo);
+            G1(1:npoint)    = G1(1:npoint) + G1Add(1:npoint);
+            G(1:npoint)     = G(1:npoint) + G1Add(1:npoint);
         end
     else
         G  = [];

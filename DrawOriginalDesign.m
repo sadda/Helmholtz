@@ -15,12 +15,15 @@ phi(phi3,3) = 1;
 phi(phi4,4) = 1;
 
 [TriInfo, matrices, phi]  = ModifyMatrices(fixGe, TriInfo, matrices, Transformation, phi);
-[constants, material]     = ObtainData(1e-5, 0, 2*pi);
+[constants, material]     = ObtainData(1e-5, 0, 1.64);
 u                         = ComputeElasticity(phi,TriInfo,Transformation,matrices,constants,material);
 [J, data.J1, J2, J3]      = ComputeObjective(phi,u,TriInfo,matrices,constants);
 
-
-options                   = struct('computeG', 0, 'computeU', 1, 'symmetrize', 0, 'separateObjective', 0);
+constants.regThetaL1      = 0;
+constants.regPhiL1        = 0;
+constants.regPhiL2        = 0;
+TriInfo.phiGe             = zeros(TriInfo.npoint,1);
+options                   = struct('computeG', 0, 'computeU', 0, 'symmetrize', 0, 'separateObjective', 1);
 [~,~,~,~,~,~,~,~,~,Theta] = ComputeData(phi, TriInfo, Transformation, matrices, constants, material, options);
 
 
@@ -34,19 +37,23 @@ minY      = min(TriInfo.y);
 maxY      = max(TriInfo.y);
 
 
-% fig = figure();
-% hold on;
-% trisurf(TriInfo.e2p, TriInfo.x, TriInfo.y, phiProlonged*(1:TriInfo.sizePhi)');
-% plot([minX maxX maxX minX minX], [minY minY maxY maxY minY], 'k');
-% title(sprintf('Area = %1.5f, strain = %1.5f, ratio = %1.5f', totalArea, data.J1, data.J1 / totalArea));
-% view(2);
-% shading interp;
-% colormap(colormap(gray));
-% set(gca,'xcolor',get(gcf,'color'));
-% set(gca,'xtick',[]);
-% set(gca,'ycolor',get(gcf,'color'));
-% set(gca,'ytick',[]);
-% saveas(fig, 'Or1a.jpg');
+fig = figure();
+hold on;
+trisurf(TriInfo.e2p, TriInfo.x, TriInfo.y, phiProlonged*(1:TriInfo.sizePhi)');
+plot([minX maxX maxX minX minX], [minY minY maxY maxY minY], 'k');
+title(sprintf('Area = %1.5f, strain = %1.5f, ratio = %1.5f', totalArea, data.J1, data.J1 / totalArea));
+view(2);
+shading interp;
+colormap(colormap(gray));
+caxis([1 4]);
+c = colorbar;
+c.Ticks = [1 2 3 4];
+c.TickLabels = {'Ge', 'SiN', 'SiO_2', 'air'};
+set(gca,'xcolor',get(gcf,'color'));
+set(gca,'xtick',[]);
+set(gca,'ycolor',get(gcf,'color'));
+set(gca,'ytick',[]);
+saveas(fig, 'Or1a.jpg');
 
 
 
@@ -90,7 +97,7 @@ if ~isempty(xyDraw)
 else
     scatter3(TriInfo.x(fixGe), TriInfo.y(fixGe), 2*max(Theta)*ones(sum(fixGe),1), 'k');
 end
-saveas(fig, 'Or_6.28.jpg')
+saveas(fig, 'Or1b.jpg')
 
 
 
