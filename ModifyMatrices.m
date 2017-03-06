@@ -9,7 +9,7 @@ function [TriInfo, matrices, phi] = ModifyMatrices(fixGe, TriInfo, matrices, Tra
     fixGe                  = fixGe & sum(phiPrescribed(:,2:end), 2) == 0;
     phiPrescribed(fixGe,1) = 1;
     phiPrescribed1         = phiPrescribed(:,1);
-
+    
     TrD_aa    = zeros(TriInfo.nelement,2,TriInfo.nphi);
     totalArea = 0;
     
@@ -35,8 +35,8 @@ function [TriInfo, matrices, phi] = ModifyMatrices(fixGe, TriInfo, matrices, Tra
     TriInfo.npointRed              = sum(TriInfo.phiRowsFree);
     TriInfo.totalArea              = totalArea;
     
-    matrices.TrD           = sparse(TriInfo.indicesIElav(:),TriInfo.indicesJElav(:),TrD_aa(:));
-    matrices.H1scalProlong = TriInfo.phiProlongationMatrix6'*matrices.H1scal*TriInfo.phiProlongationMatrix6;
+    matrices.TrD                   = sparse(TriInfo.indicesIElav(:),TriInfo.indicesJElav(:),TrD_aa(:));
+    matrices.H1scalProlong         = TriInfo.phiProlongationMatrix6'*matrices.H1scal*TriInfo.phiProlongationMatrix6;
     
     if nargin == 5 && ~isempty(phi)
         phi = phi(TriInfo.phiRowsFree,:);

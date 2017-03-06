@@ -1,16 +1,9 @@
-function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, tInitial, options)
+function [phi, t, Theta, dataEigen] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, t, options, dataEigen)
     
-    if nargin < 11
-        options = [];
-        options.computeU = 1;
-        options.symmetrize = 0;
-        options.separateObjective = 0;
+    if nargin < 12 || isempty(dataEigen)
+        dataEigen = containers.Map('KeyType','double','ValueType','any');
     end
-    if nargin < 10
-        t = 0.5;
-    else
-        t = 0.5*tInitial;
-    end
+    dataEigen(-1) = 0;
     
     if exist(dirName, 'dir')
         rmdir(dirName, 's');
@@ -22,7 +15,7 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
     %% Set parameters
     sigma   = 1e-4;   % for Armijo line search
     tMin    = 1e-10;  % minimal step size
-    tMax    = Inf;
+    tMax    = 1e10;
     TOLabs  = 1e-5;
     x       = TriInfo.x;
     y       = TriInfo.y;
@@ -37,8 +30,6 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
     resAll        = nan(IterMax, 1);
     lambda        = zeros(size(phi));
     phiProj       = phi;
-    dataEigen     = containers.Map('KeyType','double','ValueType','any');
-    dataEigen(-1) = 0;
     
     options.computeG = 0;
     [JProj,~,~,~,~,~,~,~,~,~,dataEigen] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
@@ -52,6 +43,9 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
         [~,gradient,~,~,~,~,~,~,u,Theta,dataEigen]  = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
         rieszGradient = ComputeRieszGradient(gradient, TriInfo, matrices);
         rieszGradient = reshape(rieszGradient,[],sizePhi);
+        if options.symmetrize
+            rieszGradient = SymmetryCompute(rieszGradient, TriInfo, 1, 0, 1e-8);
+        end
         if iteration == 1
             rieszGradientNorm = sqrt(ComputePhiNormSquare(rieszGradient, TriInfo, matrices));
             cOptimality       = 1/rieszGradientNorm;
@@ -93,7 +87,7 @@ function [phi, t] = ProjectedGradients(TriInfo, Transformation, matrices, materi
         resAll(iteration) = res;
         iteration         = iteration + 1;
     end
-    
+
     options.computeG   = 0;
     [J, ~, J1, J2, J3] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
     
@@ -227,13 +221,9 @@ function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradi
             t = 0.5*t;
         end
     end
-    
-    
-    % Test2_GradientFun(phi,TriInfo,Transformation,matrices,constants,material,options)
-    
-    
-    
-    
+    if options.symmetrize
+        phiProj = SymmetryCompute(phiProj, TriInfo, 1, 0, 1e-8);
+    end
 end
 
 

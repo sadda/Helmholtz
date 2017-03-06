@@ -4,40 +4,20 @@ close all;
 % Always check the mesh visually before working with it :)
 
 fixGermanium = 0;
-fixSi02      = 0;
+fixSiO2      = 0;
 fixAir       = 0;
 plotResults  = 1;
 xRange       = [-2 2];
 yRange       = [0 3];
-NX = 17;
-NY = 13;
+NX           = 17;
+NY           = 13;
 sizePhi      = 4;
 
-if ~fixGermanium && ~fixAir && ~fixSi02
-    requiredX    = [Inf Inf Inf Inf; -Inf -Inf -Inf -Inf];
-    requiredY    = [Inf Inf Inf Inf; -Inf -Inf -Inf -Inf];
-    results_file = 'MeshesCreated/Mesh_AllFree';
-    addedX       = [];
-    addedY       = [];
-elseif ~fixGermanium && ~fixAir && fixSi02
-    requiredX    = [Inf Inf -2 Inf; -Inf -Inf 2 -Inf];
-    requiredY    = [Inf Inf 0 Inf; -Inf -Inf 1 -Inf];
-    results_file = 'MeshesCreated/Mesh_GeFree_AirFree';
-    addedX       = [];
-    addedY       = [];
-elseif ~fixGermanium && fixAir
-    requiredX    = [Inf Inf -2 -2; -Inf -Inf 2 2];
-    requiredY    = [Inf Inf 0 2.5; -Inf -Inf 1 3];
-    results_file = 'MeshesCreated/Mesh_GeFree';
-    addedX       = [];
-    addedY       = [];
-else
-    requiredX    = [-0.75 -0.75 -2 -2; 0.75 0.75 2 2];
-    requiredY    = [1.1 1.48 0 2.5; 1.4 1.8 0.96 3];
-    results_file = 'MeshesCreated/Mesh_GeFixed';
-    addedX       = [];
-    addedY       = [1.445];
-end
+requiredX    = [-0.1 -0.75 -2 -2; 0.1 0.75 2 2];
+requiredY    = [1.01 1.5 0 2.5; 1.4 1.75 0.99 3];
+results_file = 'MeshesCreated/Mesh_New';
+addedX       = [];
+addedY       = [1.45];
 
 %% Create coordinates
 coordinatesX = transpose(linspace(xRange(1), xRange(2), NX));

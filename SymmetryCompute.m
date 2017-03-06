@@ -48,7 +48,7 @@ function [fSym, symError] = SymmetryCompute(f, TriInfo, isPhi, writeError, stopE
         fprintf('\nThe symmetrization error was %1.3e.\n', symError) ;
     end
     if nargin >= 5 && ~isempty(stopError) && symError > stopError
-        error('The symmetrization error was too big: %1.3e.\n', symError);
+        warning('The symmetrization error was too big: %1.3e.\n', symError);
     end
 end
 

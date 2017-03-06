@@ -4,6 +4,7 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients2(TriInfo, Transformatio
     options.computeU = 0;
     options.symmetrize = 0;
     options.separateObjective = 1;
+    options.method = 2;
     
     if nargin < 11 || isempty(dataEigen)
         dataEigen = containers.Map('KeyType','double','ValueType','any');
