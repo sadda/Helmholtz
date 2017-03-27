@@ -1,17 +1,16 @@
 clear all;
 close all;
 
-addpath('./OldCodes');
 addpath(genpath('./P1AFEM'));
 
 wavelength    = 1.64;
-refineMesh    = 5;
+refineMesh    = 6;
 drawResults   = 0;
-iterMax       = 20;
+iterMax       = 500;
 iterMaxIn     = 50;
 refineCount   = 3;
 coarsenCount  = 2;
-method        = 1;
+method        = 0;
 
 %% Set parameters
 
@@ -24,14 +23,14 @@ if method == 2
     parsAll         = combvec(unique(pars.alpha), pars.regThetaL1, pars.regPhiL1, pars.regPhiL2);
 elseif method == 1
     pars              = [];
-    pars.alpha        = 5e-5;
+    pars.alpha        = linspace(1e-5, 1e-4, 8);
     pars.cutThreshold = 0.2;
     parsAll           = combvec(unique(pars.alpha), pars.cutThreshold);
 elseif method == 0
     pars                       = [];
-    pars.alpha                 = linspace(1e-4, 1e-3, 16);
+    pars.alpha                 = linspace(5e-5, 5e-4, 8);
     pars.jointObjectiveThetaLp = 2;
-    pars.jointObjectivePhiLp   = 0;
+    pars.jointObjectivePhiLp   = 1;
     pars.geLevel2              = 0;
     pars.gammaPen              = 0;
     pars.alphaGe               = 0;
@@ -55,9 +54,10 @@ for parsIndex = 1:size(parsAll, 2)
     
     % Copy parameters based on used method
     if method == 2
-        dirNameBase = sprintf('Res_M2_%1.6f_%1.6f_%1.6f_%1.6f', alpha, pars.regThetaL1(parsIndex), pars.regPhiL1(parsIndex), pars.regPhiL2(parsIndex));
+        dirNameBase = sprintf('Res_M2_%1.6f_%1.6f_%1.6f_%1.6f', alpha, parsAll(2,parsIndex), parsAll(3,parsIndex), parsAll(4,parsIndex));
     elseif method == 1
-        dirNameBase = sprintf('Res_M1_%1.6f_%1.3f', alpha, pars.cutThreshold(parsIndex));
+        cutThreshold = parsAll(2,parsIndex);
+        dirNameBase  = sprintf('Res_M1_%1.6f_%1.3f', alpha, cutThreshold);
     elseif method == 0
         options.jointObjectiveThetaLp = parsAll(2,parsIndex);
         options.jointObjectivePhiLp   = parsAll(3,parsIndex);
@@ -199,17 +199,19 @@ for parsIndex = 1:size(parsAll, 2)
                 dirName2                 = fullfile(dirNameBase, dirName2);
                 
                 % Some matrices need to be modified if the optical cavity (and thus prescribed phi) is changed
-                [TriInfo, matrices, phi] = ModifyMatrices(fixGe, TriInfo, matrices, Transformation, phi);
-                [phi, tInit1, data]      = ProjectedGradients_Old(TriInfo, Transformation, matrices, material, constants, dirName1, iterMax, drawResults, phi, tInit1);
-                data.totalArea           = TriInfo.totalArea;
+                [TriInfo, matrices, phi]          = ModifyMatrices(fixGe, TriInfo, matrices, Transformation, phi);
+                options.method                    = 1;                
+                [phi, tInit1, ~, dataEigen, data] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName1, iterMax, drawResults, phi, tInit1, options, dataEigen);                
+                options.method                    = method;                
+                data.totalArea                    = TriInfo.totalArea;
                 
                 phi                      = SymmetryCompute(phi, TriInfo, 1, 1, 1e-8);
                 [TriInfo, matrices, phi] = ModifyMatrices(false(TriInfo.npoint, 1), TriInfo, matrices, Transformation, phi);
                 
                 if method == 2
-                    options.regThetaL1 = pars.regThetaL1(parsIndex);
-                    options.regPhiL1   = pars.regPhiL1(parsIndex);
-                    options.regPhiL2   = pars.regPhiL2(parsIndex);
+                    options.regThetaL1 = parsAll(2,parsIndex);
+                    options.regPhiL1   = parsAll(3,parsIndex);
+                    options.regPhiL2   = parsAll(4,parsIndex);
 
                     phiProlonged                     = ProlongPhi(phi, TriInfo);
                     phiGeNorm                        = sqrt(phiProlonged(:,1)'*matrices.Mloc(1:TriInfo.npoint,1:TriInfo.npoint)*phiProlonged(:,1));
@@ -220,13 +222,8 @@ for parsIndex = 1:size(parsAll, 2)
                     fixGe                            = phi2Prolonged(:,1) > 0.9;
                 else
                     TriInfo.phiGe             = 0;
-                    
-                    
-                    options.method = 2;
-                    
-                    
                     [~,~,~,~,~,~,~,~,~,Theta] = ComputeData(phi, TriInfo, Transformation, matrices, constants, material, options, []);
-                    fixGe                     = Theta >= pars.cutThreshold(parsIndex)*max(Theta(:));
+                    fixGe                     = Theta >= cutThreshold*max(Theta(:));
                 end
                 
                 fprintf('Changed nodes = %d\n', sum(abs(fixGe - fixGePrev)));
@@ -280,7 +277,7 @@ end
 
 
 
-exit;
+% exit;
 
 
 

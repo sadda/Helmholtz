@@ -1,4 +1,4 @@
-function [phi, t, Theta, dataEigen] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, t, options, dataEigen)
+function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, t, options, dataEigen)
     
     if nargin < 12 || isempty(dataEigen)
         dataEigen = containers.Map('KeyType','double','ValueType','any');
@@ -51,7 +51,11 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients(TriInfo, Transformation
             cOptimality       = 1/rieszGradientNorm;
         end
         % Determine the next iterate
-        t = min(2*t, tMax);
+        if options.method == 1
+            t = min(3*t, tMax);
+        else
+            t = min(2*t, tMax);
+        end
         [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen,options);
         % Compute the optimality (the same as in the loop with t=cOptimality)
         phiCheckNew                   = phi - cOptimality*rieszGradient;
@@ -90,6 +94,9 @@ function [phi, t, Theta, dataEigen] = ProjectedGradients(TriInfo, Transformation
 
     options.computeG   = 0;
     [J, ~, J1, J2, J3] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
+    
+    data.J  = J;
+    data.J1 = J1;
     
     fprintf('\n%13s %13s %13s %13s |\n', 'Objective', 'Objective1', 'Objective2', 'Objective3');
     fprintf('   %4.4e    %4.4e    %4.4e    %4.4e |\n', J, J1, J2, J3);
