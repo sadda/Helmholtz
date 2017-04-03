@@ -39,6 +39,7 @@ function fig = PlotFunction(f, TriInfo, data)
     set(gca,'xtick',[]);
     set(gca,'ycolor',get(gcf,'color'));
     set(gca,'ytick',[]);
+    
     if isPhi
         colormap(colormap(gray));
         caxis([1 4]);
@@ -46,7 +47,7 @@ function fig = PlotFunction(f, TriInfo, data)
         c.Ticks = [1 2 3 4];
         c.TickLabels = {'Ge', 'SiN', 'SiO_2', 'air'};
     else
-        colormap(colormap(jet));
+        colormap(flipud(colormap(hot)));
         colorbar;
     end
         

@@ -3,6 +3,8 @@ close all;
 
 addpath(genpath('./P1AFEM'));
 
+%% Set parameters
+
 wavelength    = 1.64;
 refineMesh    = 6;
 drawResults   = 0;
@@ -10,18 +12,9 @@ iterMax       = 500;
 iterMaxIn     = 50;
 refineCount   = 3;
 coarsenCount  = 2;
-method        = 0;
+method        = 1;
 
-%% Set parameters
-
-if method == 2
-    pars            = [];
-    pars.alpha      = linspace(1e-5, 1e-3, 6);
-    pars.regThetaL1 = 10.^(-4:1);
-    pars.regPhiL1   = zeros(size(pars.alpha));
-    pars.regPhiL2   = 1e-5*ones(size(pars.alpha));
-    parsAll         = combvec(unique(pars.alpha), pars.regThetaL1, pars.regPhiL1, pars.regPhiL2);
-elseif method == 1
+if method == 1
     pars              = [];
     pars.alpha        = linspace(1e-5, 1e-4, 8);
     pars.cutThreshold = 0.2;
@@ -31,10 +24,7 @@ elseif method == 0
     pars.alpha                 = linspace(5e-5, 5e-4, 8);
     pars.jointObjectiveThetaLp = 2;
     pars.jointObjectivePhiLp   = 1;
-    pars.geLevel2              = 0;
-    pars.gammaPen              = 0;
-    pars.alphaGe               = 0;
-    parsAll                    = combvec(unique(pars.alpha), pars.jointObjectiveThetaLp, pars.jointObjectivePhiLp, pars.geLevel2, unique(pars.gammaPen), unique(pars.alphaGe));
+    parsAll                    = combvec(unique(pars.alpha), pars.jointObjectiveThetaLp, pars.jointObjectivePhiLp);
 end
 
 %% Run a loop across all parameter sets
@@ -53,19 +43,14 @@ for parsIndex = 1:size(parsAll, 2)
     tInit2 = 1e3;
     
     % Copy parameters based on used method
-    if method == 2
-        dirNameBase = sprintf('Res_M2_%1.6f_%1.6f_%1.6f_%1.6f', alpha, parsAll(2,parsIndex), parsAll(3,parsIndex), parsAll(4,parsIndex));
-    elseif method == 1
+    if method == 1
         cutThreshold = parsAll(2,parsIndex);
         dirNameBase  = sprintf('Res_M1_%1.6f_%1.3f', alpha, cutThreshold);
     elseif method == 0
         options.jointObjectiveThetaLp = parsAll(2,parsIndex);
         options.jointObjectivePhiLp   = parsAll(3,parsIndex);
         options.normalizationLp       = 2;
-        options.geLevel2              = parsAll(4,parsIndex);
-        options.gammaPen              = parsAll(5,parsIndex);
-        options.alphaGe               = parsAll(6,parsIndex);
-        dirNameBase = sprintf('Res_M0_%1.6f_%d_%d_%1.4f_%1.4f_%1.4f', alpha, options.jointObjectiveThetaLp, options.jointObjectivePhiLp, options.geLevel2, options.gammaPen, options.alphaGe);
+        dirNameBase = sprintf('Res_M0_%1.6f_%d_%d', alpha, options.jointObjectiveThetaLp, options.jointObjectivePhiLp);
     end
     % Create folders where the results will be saved
     picName     = fullfile(dirNameBase, 'Pictures');
@@ -90,8 +75,7 @@ for parsIndex = 1:size(parsAll, 2)
             epsilon        = 2*max(meshMaxElement);
             phi            = 1/TriInfo.sizePhi*ones(TriInfo.npointRed, TriInfo.sizePhi);
             npoint0        = TriInfo.npoint;
-            % TODO toto jeste prepis a uvidis, co to udela
-            fixGe          = TriInfo.x >= -1 & TriInfo.x <= 1 & TriInfo.y >= 1.25 & TriInfo.y <= 1.5; % Used only for methods 1 and 2
+            fixGe          = TriInfo.x >= -1 & TriInfo.x <= 1 & TriInfo.y >= 1.25 & TriInfo.y <= 1.5; % The original optical cavity for method 1
             dataEigen      = [];
         else % Refine mesh
             TriInfoOld   = TriInfo;
@@ -182,7 +166,7 @@ for parsIndex = 1:size(parsAll, 2)
         
         %% Run an optimization method
         
-        if method ~= 0
+        if method == 1
             %% The alternating methods, where we look for a fixed point of the optical cavity
             
             fixGePrev          = fixGe;
@@ -193,14 +177,13 @@ for parsIndex = 1:size(parsAll, 2)
                     error('Nono, you have to presribe the optical cavity somewhere');
                 end
                 
-                dirName1                 = sprintf('Results_Ref%d_%d_Elas', meshIndex-1, iterIn);
-                dirName2                 = sprintf('Results_Ref%d_%d_Helm', meshIndex-1, iterIn);
-                dirName1                 = fullfile(dirNameBase, dirName1);
-                dirName2                 = fullfile(dirNameBase, dirName2);
+                dirName1 = sprintf('Results_Ref%d_%d_Elas', meshIndex-1, iterIn);
+                dirName2 = sprintf('Results_Ref%d_%d_Helm', meshIndex-1, iterIn);
+                dirName1 = fullfile(dirNameBase, dirName1);
+                dirName2 = fullfile(dirNameBase, dirName2);
                 
                 % Some matrices need to be modified if the optical cavity (and thus prescribed phi) is changed
-                [TriInfo, matrices, phi]          = ModifyMatrices(fixGe, TriInfo, matrices, Transformation, phi);
-                options.method                    = 1;                
+                [TriInfo, matrices, phi]          = ModifyMatrices(fixGe, TriInfo, matrices, Transformation, phi);              
                 [phi, tInit1, ~, dataEigen, data] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName1, iterMax, drawResults, phi, tInit1, options, dataEigen);                
                 options.method                    = method;                
                 data.totalArea                    = TriInfo.totalArea;
@@ -208,23 +191,11 @@ for parsIndex = 1:size(parsAll, 2)
                 phi                      = SymmetryCompute(phi, TriInfo, 1, 1, 1e-8);
                 [TriInfo, matrices, phi] = ModifyMatrices(false(TriInfo.npoint, 1), TriInfo, matrices, Transformation, phi);
                 
-                if method == 2
-                    options.regThetaL1 = parsAll(2,parsIndex);
-                    options.regPhiL1   = parsAll(3,parsIndex);
-                    options.regPhiL2   = parsAll(4,parsIndex);
-
-                    phiProlonged                     = ProlongPhi(phi, TriInfo);
-                    phiGeNorm                        = sqrt(phiProlonged(:,1)'*matrices.Mloc(1:TriInfo.npoint,1:TriInfo.npoint)*phiProlonged(:,1));
-                    TriInfo.phiGe                    = phiProlonged(:,1) / phiGeNorm;
-                    [phi2, tInit2, Theta, dataEigen] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName2, iterMax, drawResults, phi, tInit2, options, dataEigen);
-                    phi2                             = SymmetryCompute(phi2, TriInfo, 1, 1, 1e-8);
-                    phi2Prolonged                    = ProlongPhi(phi2, TriInfo);
-                    fixGe                            = phi2Prolonged(:,1) > 0.9;
-                else
-                    TriInfo.phiGe             = 0;
-                    [~,~,~,~,~,~,~,~,~,Theta] = ComputeData(phi, TriInfo, Transformation, matrices, constants, material, options, []);
-                    fixGe                     = Theta >= cutThreshold*max(Theta(:));
-                end
+                TriInfo.phiGe             = 0;
+                options.method            = 0;
+                [~,~,~,~,~,~,~,~,~,Theta] = ComputeData(phi, TriInfo, Transformation, matrices, constants, material, options, []);
+                options.method            = 1;
+                fixGe                     = Theta >= cutThreshold*max(Theta(:));
                 
                 fprintf('Changed nodes = %d\n', sum(abs(fixGe - fixGePrev)));
                 fprintf('Total nodes   = %d\n\n', sum(abs(fixGe)));
@@ -263,8 +234,6 @@ for parsIndex = 1:size(parsAll, 2)
             trisurf(TriInfo.e2p, TriInfo.x, TriInfo.y, phiPr(:,2));
             view(3);
             
-            data.J1        = NaN;
-            data.totalArea = NaN;
             data.iterIn    = iterIn;
             data.meshIndex = meshIndex;
             data.drawFixGe = 0;
