@@ -16,7 +16,7 @@ function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transfor
     sigma   = 1e-4;   % for Armijo line search
     tMin    = 1e-10;  % minimal step size
     tMax    = 1e10;
-    TOLabs  = 1e-5;
+    TOLabs  = 1e-7;
     x       = TriInfo.x;
     y       = TriInfo.y;
     npoint  = TriInfo.npoint;
@@ -46,10 +46,6 @@ function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transfor
         if options.symmetrize
             rieszGradient = SymmetryCompute(rieszGradient, TriInfo, 1, 0, 1e-8);
         end
-        if iteration == 1
-            rieszGradientNorm = sqrt(ComputePhiNormSquare(rieszGradient, TriInfo, matrices));
-            cOptimality       = 1/rieszGradientNorm;
-        end
         % Determine the next iterate
         if options.method == 1
             t = min(3*t, tMax);
@@ -58,7 +54,7 @@ function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transfor
         end
         [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen,options);
         % Compute the optimality (the same as in the loop with t=cOptimality)
-        phiCheckNew                   = phi - cOptimality*rieszGradient;
+        phiCheckNew                   = phi - constants.cOptimality*rieszGradient;
         [phiCheck,~,~,iterationGibbs] = ProjectionGibbs(phiCheckNew,phiProj,matrices,lambda,TriInfo);
         phiDiff                       = phi - phiCheck;
         res                           = sqrt(ComputePhiNormSquare(phiDiff, TriInfo, matrices));
@@ -91,7 +87,7 @@ function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transfor
         resAll(iteration) = res;
         iteration         = iteration + 1;
     end
-
+    
     options.computeG   = 0;
     [J, ~, J1, J2, J3] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
     
@@ -234,9 +230,9 @@ function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradi
 end
 
 
-function phiNorm = ComputePhiNormSquare(phi, TriInfo, matrices)
+function phiNormSquare = ComputePhiNormSquare(phi, TriInfo, matrices)
+    
     % It is prolonged by zero outside of the effective domain
-    phiProlonged = ProlongPhi(phi(:), TriInfo) - TriInfo.phiProlongationVector(:);
-    % It should really be divided by 2 and not by sqrt(2). Just in case that you want to spend another two hours by thinking about it.
-    phiNorm = phiProlonged'*matrices.H1scal*phiProlonged / 2;
+    phiProlonged  = ProlongPhi(phi(:), TriInfo) - TriInfo.phiProlongationVector(:);
+    phiNormSquare = phiProlonged'*matrices.H1scal*phiProlonged ;
 end

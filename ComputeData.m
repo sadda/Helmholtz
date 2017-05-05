@@ -190,8 +190,14 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi, 
     
     %% Compute objective
     
+    options.a = 1;
+    options.b = 0.1;
     if options.method == 1
-        J1 = -matrices.TrD'*u;
+        TrDMod               = matrices.TrD;
+        TrDMod(1:npoint)     = options.a*TrDMod(1:npoint);
+        TrDMod(npoint+1:end) = options.b*TrDMod(npoint+1:end);
+        
+        J1 = -TrDMod'*u;
         J2 = 0.5*(matrices.GradSq*phi(:))'*phi(:);
         J3 = 0.5*(matrices.Id'*phi(:) - (matrices.Mloc*phi(:))'*phi(:));
         
@@ -211,7 +217,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi, 
             dxux   = ux'*slocx';
             dyuy   = uy'*slocy';
             
-            AObj(k,1,1,:) = 2*(dxux+dyuy)/edet*mloc(:);
+            AObj(k,1,1,:) = 2*(options.a*dxux+options.b*dyuy)/edet*mloc(:);
         end
         ii1D = TriInfo.indicesIPhi(:,1,1,:);
         jj2D = TriInfo.indicesJPhi(:,1,1,:);
@@ -232,7 +238,7 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi, 
         J2   = 0.5*(matrices.GradSq*phi(:))'*phi(:);
         J3   = 0.5*(matrices.Id'*phi(:) - (matrices.Mloc*phi(:))'*phi(:));
         
-        J    = J1 + constants.alpha*constants.epsilon*J2 + constants.alpha/constants.epsilon*J3;        
+        J    = J1 + constants.alpha*constants.epsilon*J2 + constants.alpha/constants.epsilon*J3;
     end
     
     if nargout > 1 && options.computeG
@@ -313,13 +319,13 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi, 
         %% Compute p
         
         if options.method == 1
-            bAdjP   = matrices.TrD;
+            bAdjP   = TrDMod;
             
             p       = zeros(2*npoint,1);
             p(id)   = AEla(id,id)\bAdjP(id);
         elseif options.method == 0
             % tr(e(v))theta^2 -> v (vector)
-            bAdjP = zeros(nelement,1,3);
+            bAdjP = zeros(nelement,2,3);
             for k=1:nelement
                 edet   = Transformation{k,1};
                 slocx  = Transformation{k,9};
@@ -330,22 +336,22 @@ function [J, G, J1, J2, J3, G1, G2, G3, u, Theta, dataEigen] = ComputeData(phi, 
                     phiAux       = phi(:,1);
                     phiAux       = phiAux(e2p(k,:));
                     ThetaAux     = Theta(e2p(k,:));
-                    bAdjP(k,1,:) = 2*slocx'/edet*((phiAux.^normCon3)'*mloc*ThetaAux.^normCon2);
-                    bAdjP(k,2,:) = 2*slocy'/edet*((phiAux.^normCon3)'*mloc*ThetaAux.^normCon2);
+                    bAdjP(k,1,:) = options.a*2*slocx'/edet*((phiAux.^normCon3)'*mloc*ThetaAux.^normCon2);
+                    bAdjP(k,2,:) = options.b*2*slocy'/edet*((phiAux.^normCon3)'*mloc*ThetaAux.^normCon2);
                 else
                     switch normCon2
                         case 1
                             ThetaAux     = Theta(e2p(k,:));
-                            bAdjP(k,1,:) = 2*slocx'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
-                            bAdjP(k,2,:) = 2*slocy'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
+                            bAdjP(k,1,:) = options.a*2*slocx'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
+                            bAdjP(k,2,:) = options.b*2*slocy'/edet*(ones(size(ThetaAux))'*mloc*ThetaAux);
                         case 2
                             ThetaAux     = Theta(e2p(k,:));
-                            bAdjP(k,1,:) = 2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
-                            bAdjP(k,2,:) = 2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
+                            bAdjP(k,1,:) = options.a*2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
+                            bAdjP(k,2,:) = options.b*2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
                         otherwise
                             ThetaAux     = Theta(e2p(k,:)).^(normCon2/2);
-                            bAdjP(k,1,:) = 2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
-                            bAdjP(k,2,:) = 2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
+                            bAdjP(k,1,:) = options.a*2*slocx'/edet*(ThetaAux'*mloc*ThetaAux);
+                            bAdjP(k,2,:) = options.b*2*slocy'/edet*(ThetaAux'*mloc*ThetaAux);
                     end
                 end
             end

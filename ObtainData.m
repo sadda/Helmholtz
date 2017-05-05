@@ -1,6 +1,6 @@
 function [constants, material] = ObtainData(epsilon, alpha, wavelength, options)
     
-    constants = struct('epsilon', epsilon,'alpha',alpha);
+    constants = struct('epsilon', epsilon,'alpha',alpha,'cOptimality',1);
     
     voidC         = epsilon^2;
     lSiO          =  16.071; mSiO =  20.798;

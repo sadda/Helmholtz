@@ -9,21 +9,21 @@ fixAir       = 0;
 plotResults  = 1;
 xRange       = [-2 2];
 yRange       = [0 3];
-NX           = 17;
-NY           = 13;
+NX           = 33;
+NY           = 25;
 sizePhi      = 4;
 
-requiredX    = [-0.1 -0.75 -2 -2; 0.1 0.75 2 2];
-requiredY    = [1.01 1.5 0 2.5; 1.4 1.75 0.99 3];
-results_file = 'MeshesCreated/Mesh_New';
+requiredX    = [-0.125 -1 -2 -2; 0.125 1 2 2];
+requiredY    = [1 1.5 0 2.5; 1.49 2.1 0.99 3];
+results_file = 'MeshesCreated/Mesh_New3';
 addedX       = [];
-addedY       = [1.45];
+addedY       = [];
 
 %% Create coordinates
 coordinatesX = transpose(linspace(xRange(1), xRange(2), NX));
-coordinatesX = sort(unique([coordinatesX; addedX(:); requiredX(isfinite(requiredX))]));
+coordinatesX = sort(unique([coordinatesX; addedX(:)]));
 coordinatesY = transpose(linspace(yRange(1), yRange(2), NY));
-coordinatesY = sort(unique([coordinatesY; addedY(:); requiredY(isfinite(requiredY))]));
+coordinatesY = sort(unique([coordinatesY; addedY(:)]));
 NX = length(coordinatesX);
 NY = length(coordinatesY);
 coordinates = [repmat(coordinatesX, NY, 1), reshape(transpose(repmat(coordinatesY, 1, NX)), [], 1)];

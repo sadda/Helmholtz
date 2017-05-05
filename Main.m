@@ -7,22 +7,24 @@ addpath(genpath('./P1AFEM'));
 
 wavelength    = 1.64;
 refineMesh    = 6;
-drawResults   = 0;
+drawResults1  = 0;
+drawResults2  = 1;
 iterMax       = 500;
-iterMaxIn     = 50;
+iterMaxIn     = 20;
 refineCount   = 3;
-coarsenCount  = 2;
-method        = 1;
+coarsenCount  = 3;
+method        = 0;
 
 if method == 1
     pars              = [];
-    pars.alpha        = linspace(1e-5, 1e-4, 8);
+    %pars.alpha        = [linspace(5e-5, 1e-4, 8) linspace(1e-4, 4e-4, 6)];
+    pars.alpha        = 7e-5;
     pars.cutThreshold = 0.2;
     parsAll           = combvec(unique(pars.alpha), pars.cutThreshold);
 elseif method == 0
     pars                       = [];
-    pars.alpha                 = linspace(5e-5, 5e-4, 8);
-    pars.jointObjectiveThetaLp = 2;
+    pars.alpha                 = 4e-4;
+    pars.jointObjectiveThetaLp = 8;
     pars.jointObjectivePhiLp   = 1;
     parsAll                    = combvec(unique(pars.alpha), pars.jointObjectiveThetaLp, pars.jointObjectivePhiLp);
 end
@@ -35,7 +37,7 @@ for parsIndex = 1:size(parsAll, 2)
     options              = [];
     options.originalEps0 = 0;
     options.computeG     = 0;
-    options.symmetrize   = 0;
+    options.symmetrize   = 1;
     options.method       = method;
     
     alpha  = parsAll(1,parsIndex);
@@ -49,7 +51,7 @@ for parsIndex = 1:size(parsAll, 2)
     elseif method == 0
         options.jointObjectiveThetaLp = parsAll(2,parsIndex);
         options.jointObjectivePhiLp   = parsAll(3,parsIndex);
-        options.normalizationLp       = 2;
+        options.normalizationLp       = options.jointObjectiveThetaLp;
         dirNameBase = sprintf('Res_M0_%1.6f_%d_%d', alpha, options.jointObjectiveThetaLp, options.jointObjectivePhiLp);
     end
     % Create folders where the results will be saved
@@ -75,7 +77,7 @@ for parsIndex = 1:size(parsAll, 2)
             epsilon        = 2*max(meshMaxElement);
             phi            = 1/TriInfo.sizePhi*ones(TriInfo.npointRed, TriInfo.sizePhi);
             npoint0        = TriInfo.npoint;
-            fixGe          = TriInfo.x >= -1 & TriInfo.x <= 1 & TriInfo.y >= 1.25 & TriInfo.y <= 1.5; % The original optical cavity for method 1
+            fixGe          = TriInfo.x >= -1 & TriInfo.x <= 1 & TriInfo.y >= 1.01 & TriInfo.y <= 1.49; % The original optical cavity for method 1
             dataEigen      = [];
         else % Refine mesh
             TriInfoOld   = TriInfo;
@@ -131,6 +133,7 @@ for parsIndex = 1:size(parsAll, 2)
                         markedTriangles(k) = 1;
                     end
                 end
+                
                 if any(markedTriangles)
                     [coordinates, elements, dataToProlong, dirichlet, neumann] = coarsenNVBModified(npoint0, coordinates, elements, dataToProlong, dirichlet, neumann, logical(markedTriangles));
                     phi = dataToProlong(:,1:TriInfo.sizePhi);
@@ -183,9 +186,9 @@ for parsIndex = 1:size(parsAll, 2)
                 dirName2 = fullfile(dirNameBase, dirName2);
                 
                 % Some matrices need to be modified if the optical cavity (and thus prescribed phi) is changed
-                [TriInfo, matrices, phi]          = ModifyMatrices(fixGe, TriInfo, matrices, Transformation, phi);              
-                [phi, tInit1, ~, dataEigen, data] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName1, iterMax, drawResults, phi, tInit1, options, dataEigen);                
-                options.method                    = method;                
+                [TriInfo, matrices, phi]          = ModifyMatrices(fixGe, TriInfo, matrices, Transformation, phi);
+                [phi, tInit1, ~, dataEigen, data] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName1, iterMax, drawResults1, phi, tInit1, options, dataEigen);
+                options.method                    = method;
                 data.totalArea                    = TriInfo.totalArea;
                 
                 phi                      = SymmetryCompute(phi, TriInfo, 1, 1, 1e-8);
@@ -222,31 +225,31 @@ for parsIndex = 1:size(parsAll, 2)
             dirName = sprintf('Results_Ref%d_%d_Elas', meshIndex-1, iterIn);
             dirName = fullfile(dirNameBase, dirName);
             
-            [phi, tInit1, Theta, dataEigen] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, iterMax, drawResults, phi, tInit1, options, dataEigen);
+            [phi, tInit1, Theta, dataEigen] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, iterMax, drawResults1, phi, tInit1, options, dataEigen);
             
-            figure;
-            phiPr = ProlongPhi(phi, TriInfo);
-            trisurf(TriInfo.e2p, TriInfo.x, TriInfo.y, phiPr(:,1));
-            view(3);
-            
-            figure;
-            phiPr = ProlongPhi(phi, TriInfo);
-            trisurf(TriInfo.e2p, TriInfo.x, TriInfo.y, phiPr(:,2));
-            view(3);
-            
-            data.iterIn    = iterIn;
-            data.meshIndex = meshIndex;
-            data.drawFixGe = 0;
-            
-            DrawResults(phi, Theta, TriInfo, picName, data);
+            if drawResults2
+                figure;
+                phiPr = ProlongPhi(phi, TriInfo);
+                trisurf(TriInfo.e2p, TriInfo.x, TriInfo.y, phiPr(:,1));
+                view(3);
+                
+                figure;
+                phiPr = ProlongPhi(phi, TriInfo);
+                trisurf(TriInfo.e2p, TriInfo.x, TriInfo.y, phiPr(:,2));
+                view(3);
+                
+                data.iterIn    = iterIn;
+                data.meshIndex = meshIndex;
+                data.drawFixGe = 0;
+                
+                DrawResults(phi, Theta, TriInfo, picName, data);
+                
+                close all;
+            end
         end
     end
 end
 
-
-
-
-% exit;
 
 
 
