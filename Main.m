@@ -6,10 +6,10 @@ addpath(genpath('./P1AFEM'));
 %% Set parameters
 
 wavelength    = 1.64;
-refineMesh    = 3;                            % Number of the meshes on which the code will be run
+refineMesh    = 6;                            % Number of the meshes on which the code will be run
 drawResults1  = 1;                            % Draw displacement u, u_x, u_y, biaxial strain, Theta and possibly something more
 drawResults2  = 1;                            % Draw only u and Theta
-iterMax       = 20;                          % Maximal iteration number for the projected gradients
+iterMax       = 500;                          % Maximal iteration number for the projected gradients
 iterMaxIn     = 20;                           % Number of the maximal number of outer iterations for the alternating method
 refineCount   = 3;                            % How many times nodes should be added under each mesh refinement
 coarsenCount  = 3;                            % How many times nodes should be removed under each mesh refinement
