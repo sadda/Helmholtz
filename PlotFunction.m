@@ -1,9 +1,15 @@
-function fig = PlotFunction(f, TriInfo, data)
+function fig = PlotFunction(f, TriInfo, visible)
+    % Rather general function which plots phi (both on reduced and full mesh) or Theta
+    
+    if nargin < 3 || visible
+        visible = 'on';
+    else
+        visible = 'off';
+    end
+    
+    %% Determine whether it is phi or Theta and prolong it to the full mesh
     
     isPhi = 0;
-    if nargin < 3
-        data = [];
-    end
     if size(f,1) > TriInfo.npoint
         f     = reshape(f, [], TriInfo.sizePhi);
         isPhi = 1;
@@ -24,12 +30,14 @@ function fig = PlotFunction(f, TriInfo, data)
         isPhi = 1;
     end
     
+    %% Plot it
+    
     minX      = min(TriInfo.x);
     maxX      = max(TriInfo.x);
     minY      = min(TriInfo.y);
     maxY      = max(TriInfo.y);
     
-    fig = figure();
+    fig = figure('visible',visible);
     hold on;
     trisurf(TriInfo.e2p, TriInfo.x, TriInfo.y, f);
     plot([minX maxX maxX minX minX], [minY minY maxY maxY minY], 'k');
@@ -50,7 +58,6 @@ function fig = PlotFunction(f, TriInfo, data)
         colormap(flipud(colormap(hot)));
         colorbar;
     end
-        
-    
-    %     title(sprintf('Area = %1.5f, strain = %1.5f, ratio = %1.5f', totalArea, data.J1, data.J1 / totalArea));
 end
+
+

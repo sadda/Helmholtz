@@ -1,4 +1,5 @@
 function phi = ProlongPhi(phi, TriInfo, prolongGermanium)
+    % Prolongs phi from the free nodes to the whole mesh
     
     if nargin < 3 || ~prolongGermanium
         sizePhi      = TriInfo.sizePhi;

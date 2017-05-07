@@ -1,4 +1,5 @@
 function CropImage(imageName, imageName2)
+    % Load a saved image, crops the whitespace and saves it again. Hardcore Unix users could alternatively use the crop command :)
     
     if nargin < 2 || ~ischar(imageName2)
         [filePart1, filePart2, filePart3] = fileparts(imageName);

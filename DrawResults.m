@@ -1,4 +1,5 @@
 function DrawResults(phi, Theta, TriInfo, picName, data)
+    % Draws phi and Theta
     
     phiProlonged = ProlongPhi(phi, TriInfo);
     
@@ -13,11 +14,9 @@ function DrawResults(phi, Theta, TriInfo, picName, data)
     hold on;
     trisurf(TriInfo.e2p, TriInfo.x, TriInfo.y, phiProlonged*(1:TriInfo.sizePhi)');
     plot([minX maxX maxX minX minX], [minY minY maxY maxY minY], 'k');
-    % title(sprintf('Area = %1.5f, strain = %1.5f, ratio = %1.5f', data.totalArea, data.J1, data.J1 / data.totalArea));
     view(2);
     shading interp;
     colormap(colormap(gray));
-    % colormap jet;
     caxis([1 4]);
     c = colorbar;
     c.Ticks = [1 2 3 4];
@@ -32,7 +31,6 @@ function DrawResults(phi, Theta, TriInfo, picName, data)
     
     fig = figure('visible', 'off');
     trisurf(TriInfo.e2p, TriInfo.x, TriInfo.y, Theta);
-    % title(sprintf('Area = %1.5f, strain = %1.5f, ratio = %1.5f', data.totalArea, data.J1, data.J1 / data.totalArea));
     view(2);
     shading interp;
     colormap jet;

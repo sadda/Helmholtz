@@ -1,4 +1,5 @@
 function [TriInfo, matrices, phi] = ModifyMatrices(fixGe, TriInfo, matrices, Transformation, phi)
+    % If the optical cavity is changes, small fraction of data need to be recomputed
     
     if nargin == 5 && size(phi,1) == TriInfo.npointRed
         phi = ProlongPhi(phi, TriInfo);

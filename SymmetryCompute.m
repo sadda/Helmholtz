@@ -1,4 +1,7 @@
 function [fSym, symError] = SymmetryCompute(f, TriInfo, isPhi, writeError, stopError)
+    % Symmetrizes phi or Theta
+    
+    %% Prolongs the function onto the whole mesh
     
     fOrig = f;
     if isPhi && size(f,1) > TriInfo.npoint
@@ -20,6 +23,8 @@ function [fSym, symError] = SymmetryCompute(f, TriInfo, isPhi, writeError, stopE
         f = fAux;
     end
     
+    %% Finds the node symmetric along the x axis and computes the mean valus of these two
+    
     fSym = f;
     for i=1:size(f,1)
         if TriInfo.x(i) < 0
@@ -33,6 +38,8 @@ function [fSym, symError] = SymmetryCompute(f, TriInfo, isPhi, writeError, stopE
         end
     end
     
+    %% Transforms the symmetrized functions into the desired shape
+    
     if isPhi && size(fReshaped,1) == TriInfo.npointRed
         fSym = fSym(TriInfo.phiRowsFree,:);
     end
@@ -42,6 +49,8 @@ function [fSym, symError] = SymmetryCompute(f, TriInfo, isPhi, writeError, stopE
     if size(fOrig,1) > TriInfo.npoint
         fSym = fSym(:);
     end
+    
+    %% Computes the symmetrization error and possibly write a warning if it too large
     
     symError = norm(fSym - fOrig);
     if nargin >= 4 && writeError

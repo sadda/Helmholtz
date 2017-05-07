@@ -1,6 +1,7 @@
 function [constants, material] = ObtainData(epsilon, alpha, wavelength, options)
+    % Gathers constants into a scruct and returns material properties (air is based on epsilon)
     
-    constants = struct('epsilon', epsilon,'alpha',alpha,'cOptimality',1);
+    constants     = struct('epsilon',epsilon,'alpha',alpha,'cOptimality',1);
     
     voidC         = epsilon^2;
     lSiO          =  16.071; mSiO =  20.798;

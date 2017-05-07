@@ -1,6 +1,7 @@
-function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, t, options, dataEigen)
+function [phi, t, Theta, dataEigen] = ProjectedGradients(TriInfo, Transformation, matrices, material, constants, dirName, IterMax, drawResults, phi, t, options, dataEigen)
+    % Runs the projected gradient method as described in the enlosed text.
     
-    if nargin < 12 || isempty(dataEigen)
+    if nargin < 12 || isempty(dataEigen) % Stores (selected) eigenvalues computed earlier. Used for shift for the eigenvalue computation.
         dataEigen = containers.Map('KeyType','double','ValueType','any');
     end
     dataEigen(-1) = 0;
@@ -13,53 +14,59 @@ function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transfor
     Theta = [];
     
     %% Set parameters
-    sigma   = 1e-4;   % for Armijo line search
-    tMin    = 1e-10;  % minimal step size
-    tMax    = 1e10;
-    TOLabs  = 1e-7;
-    x       = TriInfo.x;
-    y       = TriInfo.y;
-    npoint  = TriInfo.npoint;
-    e2p     = TriInfo.e2p;
-    sizePhi = TriInfo.sizePhi;
     
-    %% Projected gradients
+    sigma   = 1e-4;              % For the Armijo line search
+    tMin    = 1e-10;             % Minimal step size
+    tMax    = 1e10;              % Maximal step size
+    stopTol = 1e-7;              % Stopping tolerance
+    
+    %% Set the initial data
+    
+    x       = TriInfo.x;         % Coordinates x
+    y       = TriInfo.y;         % Coordinates y
+    npoint  = TriInfo.npoint;    % Number of nodes
+    e2p     = TriInfo.e2p;       % Elements
+    sizePhi = TriInfo.sizePhi;   % Number for phases
+    
     iteration     = 1;
     iterationData = fullfile(dirName, 'IterationData.csv');
-    res           = Inf;
-    resAll        = nan(IterMax, 1);
-    lambda        = zeros(size(phi));
+    res           = Inf;              % Current residual
+    resAll        = nan(IterMax, 1);  % All residuals
+    lambda        = zeros(size(phi)); % Multiplier for the projection onto the Gibbs simplex
     phiProj       = phi;
     
-    options.computeG = 0;
+    options.computeG = 0;             % Determines whether the gradient will be computed (saves time if not). Is switched two times during each iteration
     [JProj,~,~,~,~,~,~,~,~,~,dataEigen] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
     
-    while res > TOLabs && iteration <= IterMax && abs(t) >= tMin
+    while res > stopTol && iteration <= IterMax && abs(t) >= tMin
+        %% Run the optimization
+        
         tic;
-        phi           = phiProj;
-        J             = JProj;
+        phi           = phiProj; % phi
+        J             = JProj;   % Objective function
         dataEigen(-1) = 0;
         options.computeG = 1;
+        
+        % First compute gradient and then its Riesz representation
         [~,gradient,~,~,~,~,~,~,u,Theta,dataEigen]  = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
         rieszGradient = ComputeRieszGradient(gradient, TriInfo, matrices);
         rieszGradient = reshape(rieszGradient,[],sizePhi);
         if options.symmetrize
             rieszGradient = SymmetryCompute(rieszGradient, TriInfo, 1, 0, 1e-8);
         end
-        % Determine the next iterate
-        if options.method == 1
-            t = min(3*t, tMax);
-        else
-            t = min(2*t, tMax);
-        end
+        
+        % Determine the step size and iterate
+        t = min(2*t, tMax);
         [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen,options);
-        % Compute the optimality (the same as in the loop with t=cOptimality)
+        
+        % Compute the optimality (with t=cOptimality)
         phiCheckNew                   = phi - constants.cOptimality*rieszGradient;
         [phiCheck,~,~,iterationGibbs] = ProjectionGibbs(phiCheckNew,phiProj,matrices,lambda,TriInfo);
         phiDiff                       = phi - phiCheck;
         res                           = sqrt(ComputePhiNormSquare(phiDiff, TriInfo, matrices));
         
         %% Print results and save iterations
+        
         if iteration == 1 || mod(iteration, 20) == 0
             fprintf('%10s | %10s | %10s | %10s | %10s |\n', 'Iteration', 'StepSize', 'Objective', 'Residual', 'Time');
         end
@@ -88,11 +95,10 @@ function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transfor
         iteration         = iteration + 1;
     end
     
+    %% Recompute some data and save everything
+    
     options.computeG   = 0;
     [J, ~, J1, J2, J3] = ComputeData(phi,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
-    
-    data.J  = J;
-    data.J1 = J1;
     
     fprintf('\n%13s %13s %13s %13s |\n', 'Objective', 'Objective1', 'Objective2', 'Objective3');
     fprintf('   %4.4e    %4.4e    %4.4e    %4.4e |\n', J, J1, J2, J3);
@@ -101,8 +107,8 @@ function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transfor
     save(fullfile(dirName, 'phi'), 'phi');
     save(fullfile(dirName, 'DataAll'));
     
-    %% Draw all figures (after finishing optimization)
-    % Load phi from the files
+    %% Load phi, u and Theta from individual files and merge them into one big file
+    
     if exist(strcat(dirName, '/PhiAll.mat'), 'file') == 2
         load(strcat(dirName, '/PhiAll.mat'));
         load(strcat(dirName, '/UAll.mat'));
@@ -132,7 +138,11 @@ function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transfor
         save(strcat(dirName, '/UAll.mat'), 'uAll');
         save(strcat(dirName, '/ThetaAll.mat'), 'ThetaAll');
     end
+    
+    %% Draw all figures
+    
     if drawResults
+        % Select which iterations will be drawn
         fileNumberSpace = 200;
         fileNumber      = size(phiAll, 1);
         figureNumber    = 1 + ceil(fileNumber / fileNumberSpace);
@@ -144,21 +154,25 @@ function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transfor
         else
             iterationAll = minIndex;
         end
-        colormap jet;
+        
         for iteration=iterationAll
             phi          = squeeze(phiAll(iteration,:,:));
             u            = squeeze(uAll(iteration,:))';
             Theta        = squeeze(ThetaAll(iteration,:))';
             phiProlonged = ProlongPhi(phi, TriInfo);
             
-            set(gcf,'Visible','off');
-            filename = fullfile(dirName, ['iterate', num2str(iteration), '.jpg']);
-            clf;
-            trisurf(e2p, x, y, phiProlonged*(1:sizePhi)');
-            view(2);
-            shading interp;
-            saveas(gcf, filename, 'jpg');
+            % Draw phi (all at once)
+            fig = PlotFunction(phiProlonged, TriInfo, 0);
+            filename = fullfile(dirName, ['PhiAll', num2str(iteration), '.jpg']);
+            saveas(fig, filename, 'jpg');
             
+            % Plot Theta
+            fig = PlotFunction(Theta, TriInfo, 0);
+            filename = fullfile(dirName, ['Theta', num2str(iteration), '.jpg']);
+            saveas(fig, filename, 'jpg');
+            
+            colormap jet;
+            % Draw phi (each phase separately)
             for i=1:sizePhi
                 set(gcf,'Visible','off');
                 filename = fullfile(dirName, ['Phi', int2str(i), '_iterate', num2str(iteration),'.jpg']);
@@ -167,18 +181,21 @@ function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transfor
                 saveas(gcf, filename, 'jpg');
             end
             
+            % Draw ux
             set(gcf,'Visible','off');
             filename = fullfile(dirName, ['Ux_iterate', num2str(iteration), '.jpg']);
             clf;
             trisurf(e2p, x, y, u(1:npoint));
             saveas(gcf, filename, 'jpg');
             
+            % Draw uy
             set(gcf,'Visible','off');
             filename = fullfile(dirName, ['Uy_iterate', num2str(iteration),'.jpg']);
             clf;
             trisurf(e2p, x, y, u(npoint+1:end));
             saveas(gcf,filename,'jpg');
             
+            % Draw biaxial strain
             v      = matrices.Mloc2D\(matrices.Tr2D*u);
             vx     = v(1:npoint);
             vy     = v(npoint+1:2*npoint);
@@ -188,33 +205,19 @@ function [phi, t, Theta, dataEigen, data] = ProjectedGradients(TriInfo, Transfor
             clf;
             trisurf(e2p, x, y, tr_eps);
             saveas(gcf,filename,'jpg');
-            
-            boundPhi = phiProlonged(:,1)>=0.3;
-            boundX   = TriInfo.x(boundPhi);
-            boundY   = TriInfo.y(boundPhi);
-            bound    = boundary(boundX, boundY);
-            set(gcf,'Visible','off');
-            filename = fullfile(dirName, ['Mode', num2str(iteration), '.jpg']);
-            trisurf(e2p, x, y, Theta);
-            view(2);
-            shading interp;
-            colormap jet;
-            colorbar;
-            hold on;
-            plot3(boundX(bound), boundY(bound), 2*ones(size(bound)), 'k');
-            saveas(gcf,filename,'jpg');
         end
     end
 end
 
 function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradient,t,lambda,TriInfo,Transformation,matrices,constants,material,sigma,tMin,dataEigen,options)
+    % Computes the step size based on the Armijo condition
     
     phiProj = phi;
     while true
         phiNew                              = phi-t*rieszGradient;
         [phiProj,lambda]                    = ProjectionGibbs(phiNew,phiProj,matrices,lambda,TriInfo);
         dataEigen(-1)                       = t;
-        options.computeG = 0;
+        options.computeG                    = 0;
         [JProj,~,~,~,~,~,~,~,~,~,dataEigen] = ComputeData(phiProj,TriInfo,Transformation,matrices,constants,material,options,dataEigen);
         phiDiff                             = phi-phiProj;
         normPhiDiffSquare                   = ComputePhiNormSquare(phiDiff, TriInfo, matrices);
@@ -229,10 +232,19 @@ function [phiProj,t,lambda,JProj,dataEigen] = PerformLineSearch(phi,J,rieszGradi
     end
 end
 
-
 function phiNormSquare = ComputePhiNormSquare(phi, TriInfo, matrices)
+    % Computes the H^1 norm of phi.
     
-    % It is prolonged by zero outside of the effective domain
     phiProlonged  = ProlongPhi(phi(:), TriInfo) - TriInfo.phiProlongationVector(:);
     phiNormSquare = phiProlonged'*matrices.H1scal*phiProlonged ;
 end
+
+function rieszGradient = ComputeRieszGradient(gradient, TriInfo, matrices)
+    % Computes the Riesz gradient, thus pulls the gradient from (H^1)^* into H^1
+    
+    phiRowsFree6  = TriInfo.phiRowsFree6;
+    rieszGradient = matrices.H1scal(phiRowsFree6,phiRowsFree6) \ gradient;
+end
+
+
+

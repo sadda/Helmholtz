@@ -1,4 +1,6 @@
 function TableToTex(data, formatAll)
+    % Writes a table into the Latex code. Take care when using and check the result
+    
     for i=1:size(data,1)
         for j=1:size(data,2)
             value      = data(i,j);
@@ -12,14 +14,13 @@ function TableToTex(data, formatAll)
                     valueToPrint       = value*10.^(-orderOfMag);
                     formatTypeMod      = formatType;
                     formatTypeMod(end) = 'f';
-
+                    
                     fprintf('$');
                     fprintf(formatTypeMod, valueToPrint);
                     fprintf('\\sdot 10^{%d}', orderOfMag);
                     fprintf('$');
                 case 's'
                     error('Not implemented. Need to pass to cell arrays.');
-                    % fprintf(formatAll{i}, value);
                 otherwise
                     fprintf('$');
                     fprintf(formatAll{i}, value);
@@ -33,3 +34,5 @@ function TableToTex(data, formatAll)
         end
     end
 end
+
+

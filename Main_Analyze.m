@@ -1,10 +1,19 @@
+% Analyzes the performance of the projected gradient method. Specifically it computes:
+%   On all meshes it computes iteration number, node number, best residual and Ginzburg-Landau energy at the optimal solution
+%   Plots phi and Theta for the original wavelength and then for wavelength = 4
+%   Plots all meshes, where the refinement and coarsening can be seen
+%   Plots the prescribed values
+%   Attempts to compute the perimeter of the projection to the pure phases. Take this value with a small margin as there some zig-zagging
+
+
 close all;
 clear all;
 
 %% Prepare data
 
-%folderNameBase = fullfile('Results', 'Res_M0_0.000400_2_1');
-folderNameBase = fullfile('Res_M0_0.000400_2_1');
+addpath(genpath('./P1AFEM'));
+
+folderNameBase = fullfile('Res_M0_0.000400_2_1_FINAL');
 refineMesh     = 6;
 drawPrescribed = 0;
 
@@ -73,9 +82,7 @@ end
 %% Draw prescribed values
 
 if drawPrescribed
-    addpath(genpath('./P1AFEM'));
-    
-    data            = load('MeshesCreated/Mesh_New2/Data.mat');
+    data            = load('MeshesCreated/Mesh_Final/Data.mat');
     TriInfo0        = data.TriInfo;
     
     mesh          = struct('coordinates', [TriInfo0.x TriInfo0.y], 'elements', TriInfo0.e2p);
